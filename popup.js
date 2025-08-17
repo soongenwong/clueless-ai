@@ -13,12 +13,31 @@ class PopupController {
         this.groqKeyInput = document.getElementById('groqKey');
         this.elevenKeyInput = document.getElementById('elevenKey');
         this.saveKeysBtn = document.getElementById('saveKeys');
+        this.toggleGroqBtn = document.getElementById('toggleGroq');
+        this.toggleElevenBtn = document.getElementById('toggleEleven');
+
+        // Add Clear Keys button dynamically if not present
+        if (!document.getElementById('clearKeys')) {
+            const clearBtn = document.createElement('button');
+            clearBtn.id = 'clearKeys';
+            clearBtn.className = 'secondary-btn';
+            clearBtn.textContent = 'Clear Keys';
+            clearBtn.style.flex = '1';
+            // insert after save button
+            this.saveKeysBtn.parentElement.appendChild(clearBtn);
+            this.clearKeysBtn = clearBtn;
+        } else {
+            this.clearKeysBtn = document.getElementById('clearKeys');
+        }
     }
-    
+
     bindEvents() {
         this.startGuideBtn.addEventListener('click', () => this.startGuide());
         this.stopGuideBtn.addEventListener('click', () => this.stopGuide());
         this.saveKeysBtn.addEventListener('click', () => this.saveKeys());
+        this.clearKeysBtn.addEventListener('click', () => this.clearKeys());
+        this.toggleGroqBtn.addEventListener('click', (e) => this.toggleVisibility(e, this.groqKeyInput));
+        this.toggleElevenBtn.addEventListener('click', (e) => this.toggleVisibility(e, this.elevenKeyInput));
         
         // Allow Enter key to trigger guide
         this.userRequestInput.addEventListener('keypress', (e) => {
@@ -30,13 +49,19 @@ class PopupController {
         // Focus input on popup open
         this.userRequestInput.focus();
 
-        // Load saved keys
-        chrome.storage.local.get(['groq_api_key', 'eleven_api_key'], (result) => {
-            if (result.groq_api_key) this.groqKeyInput.value = result.groq_api_key;
-            if (result.eleven_api_key) this.elevenKeyInput.value = result.eleven_api_key;
-        });
+        // Load saved keys and keep them visible
+        this.loadSavedKeys();
     }
-    
+
+    toggleVisibility(event, inputEl) {
+        event.preventDefault();
+        if (inputEl.type === 'password') {
+            inputEl.type = 'text';
+        } else {
+            inputEl.type = 'password';
+        }
+    }
+
     async startGuide() {
         const userRequest = this.userRequestInput.value.trim();
         
@@ -156,6 +181,50 @@ class PopupController {
         setTimeout(() => {
             this.statusDiv.style.display = 'none';
         }, 3000);
+    }
+
+    saveKeys() {
+        const groq = this.groqKeyInput.value.trim();
+        const eleven = this.elevenKeyInput.value.trim();
+
+        const newValues = {};
+        if (groq) newValues.groq_api_key = groq;
+        if (eleven) newValues.eleven_api_key = eleven;
+
+        if (Object.keys(newValues).length === 0) {
+            this.showStatus('No keys entered to save', 'error');
+            return;
+        }
+
+        chrome.storage.local.set(newValues, () => {
+            this.showStatus('API keys saved permanently', 'success');
+            console.log('Keys saved:', Object.keys(newValues));
+        });
+    }
+
+    loadSavedKeys() {
+        chrome.storage.local.get(['groq_api_key', 'eleven_api_key', 'eleven_voice_id'], (result) => {
+            console.log('Loading saved keys:', Object.keys(result));
+            if (result.groq_api_key) {
+                this.groqKeyInput.value = result.groq_api_key;
+                console.log('Loaded GROQ key');
+            }
+            if (result.eleven_api_key) {
+                this.elevenKeyInput.value = result.eleven_api_key;
+                console.log('Loaded Eleven key');
+            }
+            if (result.eleven_voice_id) {
+                console.log('Eleven voice ID available:', result.eleven_voice_id);
+            }
+        });
+    }
+
+    clearKeys() {
+        chrome.storage.local.remove(['groq_api_key', 'eleven_api_key', 'eleven_voice_id'], () => {
+            this.groqKeyInput.value = '';
+            this.elevenKeyInput.value = '';
+            this.showStatus('API keys cleared', 'success');
+        });
     }
 }
 

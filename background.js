@@ -102,6 +102,75 @@ class BackgroundController {
                 });
                 return true; // indicate we'll call sendResponse asynchronously
 
+            case 'AI_PARSE_REQUEST':
+                // Use GROQ API with model llama-3.1-8b-instant to parse natural language request
+                chrome.storage.local.get(['groq_api_key'], async (items) => {
+                    const apiKey = items.groq_api_key;
+                    if (!apiKey) {
+                        sendResponse({ success: false, error: 'missing_groq_api_key' });
+                        return;
+                    }
+
+                    try {
+                        const prompt = `You are a helpful assistant for a browser extension. The user gives a natural language request and a short page snippet. Your job is to help them find CLICKABLE, INTERACTIVE elements they can actually use.
+
+IMPORTANT: Focus on elements the user can click, type in, or interact with (buttons, links, inputs, menus, etc.).
+
+Respond ONLY with valid JSON with these keys:
+- "selectors": an array of CSS selectors (can include :contains("text") pseudo-selectors) that find INTERACTIVE elements matching the user's intent, ordered by priority
+- "message": a short, natural instruction telling the user what they can DO with the element you found
+
+User request: "${(request.text || '').replace(/"/g,'\\"')}"
+Page snippet: "${(request.pageSnippet || '').replace(/"/g,'\\"').slice(0,2000)}"
+
+Examples of good responses:
+{"selectors": ["button:contains('Sign In')", "a[href*='login']"], "message": "Click here to sign into your account"}
+{"selectors": ["input[placeholder*='search']", "button:contains('Search')"], "message": "Type your search term here and click search"}
+{"selectors": ["a[href*='contact']", "button:contains('Contact')"], "message": "Click here to get in touch with support"}
+
+Respond only with JSON:`;
+
+                        const body = { prompt, max_tokens: 500 };
+
+                        const resp = await fetch('https://api.groq.ai/v1/models/llama-3.1-8b-instant/completions', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${apiKey}`
+                            },
+                            body: JSON.stringify(body)
+                        });
+
+                        const data = await resp.json();
+
+                        let textOutput = '';
+                        if (typeof data === 'string') textOutput = data;
+                        else if (data.completion) textOutput = data.completion;
+                        else if (data.output && typeof data.output === 'string') textOutput = data.output;
+                        else if (data.choices && data.choices[0]) textOutput = data.choices[0].text || data.choices[0].message?.content || '';
+                        else textOutput = JSON.stringify(data);
+
+                        const jsonMatch = textOutput.match(/\{[\s\S]*\}/);
+                        let selectors = [];
+                        let message = '';
+                        if (jsonMatch) {
+                            try {
+                                const parsed = JSON.parse(jsonMatch[0]);
+                                if (Array.isArray(parsed.selectors)) selectors = parsed.selectors;
+                                if (typeof parsed.message === 'string') message = parsed.message;
+                            } catch (e) {
+                                console.warn('Failed to parse AI_PARSE_REQUEST JSON:', e);
+                            }
+                        }
+
+                        sendResponse({ success: true, selectors, message });
+                    } catch (err) {
+                        console.warn('GROQ parse request failed:', err);
+                        sendResponse({ success: false, error: String(err) });
+                    }
+                });
+                return true;
+
             case 'ELEVEN_TTS':
                 // Use Eleven Labs TTS (eleven_flash_v2_5) to synthesize audio and return base64
                 chrome.storage.local.get(['eleven_api_key', 'eleven_voice_id'], async (items) => {
@@ -245,7 +314,7 @@ class BackgroundController {
         if (chrome.notifications) {
             chrome.notifications.create('welcome', {
                 type: 'basic',
-                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjQiIGN5PSIyNCIgcj0iMjQiIGZpbGw9IiM2NjdlZWEiLz4KPHN2ZyB4PSIxNiIgeT0iMTYiIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+CjxwYXRoIGQ9Im0xMiAyIDMuMDkgNi4yNkwyMSA5bC0yLjc5IDQuNzQuNjkgNi42OS01Ljc5LTMuMTNMMTAgMjBsLjY5LTYuNjlMMSA5bDUuOTEtLjc0TDEyIDJ6Ii8+Cjwvc3ZnPgo8L3N2Zz4K',
+                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjQiIGN5PSIyNCIgcj0iMjQiIGZpbGw9IiM2NjdlZWEiLz4KPHN2ZyB4PSIxNiIgeT0iMTYiIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+CjxwYXRoIGQ9Im0xMiAyIDMuMDkgNi4yNkwyMSA9bC0yLjc5IDQuNzQuNjkgNi42OS01Ljc5LTMuMTNMMTAgMjBsLjY5LTYuNjlMMSA9bDUuOTEtLjc0TDEyIDJ6Ii8+Cjwvc3ZnPgo8L3N2Zz4K',
                 title: 'Welcome to Clueless AI!',
                 message: 'Your smart web assistant is ready. Click the extension icon on any website to get started!'
             });

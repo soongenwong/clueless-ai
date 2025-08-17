@@ -39,7 +39,7 @@
             font-weight: 500;
         }
         
-        input[type="text"] {
+        input[type="text"], input[type="password"] {
             width: 100%;
             padding: 10px;
             border: none;
@@ -141,11 +141,17 @@
     <!-- API keys section -->
     <div class="input-group">
         <label for="groqKey">GROQ API Key</label>
-        <input type="text" id="groqKey" placeholder="Enter GROQ API Key">
+        <div style="display:flex;gap:8px;align-items:center;">
+            <input type="password" id="groqKey" placeholder="Enter GROQ API Key">
+            <button id="toggleGroq" title="Show/Hide" style="padding:8px;border-radius:6px;">👁️</button>
+        </div>
     </div>
     <div class="input-group">
         <label for="elevenKey">Eleven Labs API Key</label>
-        <input type="text" id="elevenKey" placeholder="Enter Eleven Labs API Key">
+        <div style="display:flex;gap:8px;align-items:center;">
+            <input type="password" id="elevenKey" placeholder="Enter Eleven Labs API Key">
+            <button id="toggleEleven" title="Show/Hide" style="padding:8px;border-radius:6px;">👁️</button>
+        </div>
     </div>
     <div class="button-group">
         <button id="saveKeys" class="primary-btn">Save Keys</button>

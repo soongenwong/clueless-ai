@@ -54,13 +54,14 @@ class CluelessAI {
         let elements = this.findElements(guidance.elements);
         
         if (elements.length === 0) {
-            // Try AI-powered selector suggestions from background (GROQ / llama-3.1-8b-instant)
+            // Try AI-powered selector suggestions from background (natural-language parsing via GROQ)
             try {
                 const pageSnippet = document.documentElement.innerText.slice(0, 2000); // small context
                 const resp = await this.requestAISuggestions(originalRequest, pageSnippet);
                 if (resp && resp.selectors && resp.selectors.length > 0) {
                     console.log('AI suggested selectors:', resp.selectors);
                     elements = this.findElements(resp.selectors);
+                    if (resp.message) guidance.message = resp.message; // use natural-language message from AI
                 }
             } catch (err) {
                 console.warn('AI selector request failed:', err);
@@ -118,9 +119,54 @@ class CluelessAI {
             }
         }
         
-        // Remove duplicates and return visible elements
+        // Remove duplicates and return visible, interactive elements
         const uniqueElements = [...new Set(foundElements)];
-        return uniqueElements.filter(el => this.isElementVisible(el));
+        const visibleElements = uniqueElements.filter(el => this.isElementVisible(el));
+        
+        // Prioritize interactive/clickable elements
+        return this.prioritizeInteractiveElements(visibleElements);
+    }
+
+    prioritizeInteractiveElements(elements) {
+        const interactive = [];
+        const nonInteractive = [];
+        
+        elements.forEach(el => {
+            if (this.isInteractiveElement(el)) {
+                interactive.push(el);
+            } else {
+                nonInteractive.push(el);
+            }
+        });
+        
+        // Return interactive elements first, then non-interactive
+        return [...interactive, ...nonInteractive];
+    }
+
+    isInteractiveElement(element) {
+        const tagName = element.tagName.toLowerCase();
+        
+        // Check if element is inherently interactive
+        const interactiveTags = ['button', 'a', 'input', 'select', 'textarea', 'label'];
+        if (interactiveTags.includes(tagName)) return true;
+        
+        // Check for clickable attributes
+        if (element.onclick || element.getAttribute('onclick')) return true;
+        if (element.style.cursor === 'pointer') return true;
+        if (element.getAttribute('role') === 'button') return true;
+        if (element.getAttribute('tabindex') && element.getAttribute('tabindex') !== '-1') return true;
+        
+        // Check for clickable classes (common patterns)
+        const classList = element.className.toLowerCase();
+        const clickableClasses = ['btn', 'button', 'click', 'link', 'menu-item', 'nav-item', 'action'];
+        if (clickableClasses.some(cls => classList.includes(cls))) return true;
+        
+        // Check if it's focusable or has event listeners
+        try {
+            if (element.tabIndex >= 0) return true;
+        } catch (e) {}
+        
+        return false;
     }
     
     findElementsByText(selector) {
@@ -155,6 +201,10 @@ class CluelessAI {
             this.speak("I couldn't find a suitable element to guide you to.");
             return;
         }
+
+        // Check if element is interactive and provide appropriate message
+        const isInteractive = this.isInteractiveElement(targetElement);
+        const actionText = this.getActionText(targetElement);
         
         // Scroll element into view
         targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -178,7 +228,8 @@ class CluelessAI {
                 <div class="clueless-ai-step-content">
                     <p><strong>Your request:</strong> "${originalRequest}"</p>
                     <p>${message}</p>
-                    <p>🎯 This element should help you with what you're looking for!</p>
+                    ${isInteractive ? `<p>🖱️ <strong>${actionText}</strong></p>` : ''}
+                    <p>🎯 This ${isInteractive ? 'interactive ' : ''}element should help you with what you're looking for!</p>
                 </div>
             `,
             attachTo: {
@@ -187,8 +238,13 @@ class CluelessAI {
             },
             buttons: [
                 {
-                    text: 'Got it!',
+                    text: isInteractive ? 'Click It!' : 'Got it!',
                     action: () => {
+                        if (isInteractive) {
+                            // Simulate a click on the element
+                            targetElement.click();
+                            this.speak("I clicked it for you!");
+                        }
                         this.currentTour.complete();
                         this.speak("Great! Let me know if you need help with anything else.");
                     },
@@ -211,10 +267,37 @@ class CluelessAI {
         this.highlightElement(targetElement);
         
         // Speak the guidance
-        this.speak(message);
+        this.speak(message + (isInteractive ? ` ${actionText}` : ''));
         
         // Show notification
         this.showNotification("Found it!", message, "success");
+    }
+
+    getActionText(element) {
+        const tagName = element.tagName.toLowerCase();
+        
+        switch (tagName) {
+            case 'button':
+                return 'Click this button to proceed';
+            case 'a':
+                return 'Click this link to navigate';
+            case 'input':
+                const type = element.getAttribute('type') || 'text';
+                if (type === 'submit' || type === 'button') {
+                    return 'Click this button to submit';
+                } else {
+                    return 'Click here to type your input';
+                }
+            case 'select':
+                return 'Click here to choose an option';
+            case 'textarea':
+                return 'Click here to enter text';
+            default:
+                if (this.isInteractiveElement(element)) {
+                    return 'Click here to interact';
+                }
+                return 'This is the element you requested';
+        }
     }
     
     showNextElement(elements, index, message, originalRequest) {
@@ -327,19 +410,24 @@ class CluelessAI {
         return new Promise((resolve) => {
             try {
                 chrome.runtime.sendMessage({
-                    action: 'AI_SUGGEST_SELECTORS',
-                    requestText: originalRequest,
+                    action: 'AI_PARSE_REQUEST',
+                    text: originalRequest,
                     pageSnippet: pageSnippet
                 }, (response) => {
-                    if (response && response.success && response.selectors) {
-                        resolve({ selectors: response.selectors });
+                    if (response && response.success) {
+                        resolve({ selectors: response.selectors || [], message: response.message || null });
                     } else {
-                        resolve({ selectors: [] });
+                        // Fallback to older selector-only endpoint if available
+                        if (response && response.selectors) {
+                            resolve({ selectors: response.selectors, message: null });
+                        } else {
+                            resolve({ selectors: [], message: null });
+                        }
                     }
                 });
             } catch (err) {
                 console.warn('requestAISuggestions error:', err);
-                resolve({ selectors: [] });
+                resolve({ selectors: [], message: null });
             }
         });
     }
