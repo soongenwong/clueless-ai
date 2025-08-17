@@ -45,7 +45,108 @@ class BackgroundController {
                 this.logUsage(request.data);
                 sendResponse({ success: true });
                 break;
-                
+
+            case 'AI_SUGGEST_SELECTORS':
+                // Use GROQ API with model llama-3.1-8b-instant to suggest CSS selectors
+                chrome.storage.local.get(['groq_api_key'], async (items) => {
+                    const apiKey = items.groq_api_key;
+                    if (!apiKey) {
+                        sendResponse({ success: false, error: 'missing_groq_api_key' });
+                        return;
+                    }
+
+                    try {
+                        const prompt = `You are an assistant that returns a JSON object with a single key \"selectors\" whose value is an array of CSS selectors (or :contains() pseudo selectors) that best match the user's request.\nUser request: "${(request.requestText || '').replace(/"/g,'\"')}"\nPage snippet: "${(request.pageSnippet || '').replace(/"/g,'\"').slice(0,2000)}"\nRespond ONLY with valid JSON like: {"selectors": ["selector1", "selector2"]}`;
+
+                        const body = {
+                            prompt,
+                            max_tokens: 300
+                        };
+
+                        const resp = await fetch('https://api.groq.ai/v1/models/llama-3.1-8b-instant/completions', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${apiKey}`
+                            },
+                            body: JSON.stringify(body)
+                        });
+
+                        const data = await resp.json();
+
+                        // Try to find the text output in a few common fields
+                        let textOutput = '';
+                        if (typeof data === 'string') textOutput = data;
+                        else if (data.completion) textOutput = data.completion;
+                        else if (data.output && typeof data.output === 'string') textOutput = data.output;
+                        else if (data.choices && data.choices[0]) textOutput = data.choices[0].text || data.choices[0].message?.content || '';
+                        else textOutput = JSON.stringify(data);
+
+                        // Extract first JSON object from the model output
+                        const jsonMatch = textOutput.match(/\{[\s\S]*\}/);
+                        let selectors = [];
+                        if (jsonMatch) {
+                            try {
+                                const parsed = JSON.parse(jsonMatch[0]);
+                                if (Array.isArray(parsed.selectors)) selectors = parsed.selectors;
+                            } catch (e) {
+                                console.warn('Failed to parse selectors JSON from model output:', e);
+                            }
+                        }
+
+                        sendResponse({ success: true, selectors });
+                    } catch (err) {
+                        console.warn('GROQ selector request failed:', err);
+                        sendResponse({ success: false, error: String(err) });
+                    }
+                });
+                return true; // indicate we'll call sendResponse asynchronously
+
+            case 'ELEVEN_TTS':
+                // Use Eleven Labs TTS (eleven_flash_v2_5) to synthesize audio and return base64
+                chrome.storage.local.get(['eleven_api_key', 'eleven_voice_id'], async (items) => {
+                    const apiKey = items.eleven_api_key;
+                    const voiceId = items.eleven_voice_id || 'alloy';
+
+                    if (!apiKey) {
+                        sendResponse({ success: false, error: 'missing_eleven_api_key' });
+                        return;
+                    }
+
+                    try {
+                        const elevenEndpoint = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`;
+                        const payload = {
+                            text: request.text || '',
+                            model: 'eleven_flash_v2_5'
+                        };
+
+                        const resp = await fetch(elevenEndpoint, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'xi-api-key': apiKey
+                            },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (!resp.ok) {
+                            const text = await resp.text();
+                            console.warn('Eleven TTS error response:', resp.status, text);
+                            sendResponse({ success: false, error: `eleven_error_${resp.status}` });
+                            return;
+                        }
+
+                        const arrayBuffer = await resp.arrayBuffer();
+                        // Convert to base64
+                        const base64 = arrayBufferToBase64(arrayBuffer);
+                        sendResponse({ success: true, audioBase64: base64 });
+                    } catch (err) {
+                        console.warn('Eleven TTS request failed:', err);
+                        sendResponse({ success: false, error: String(err) });
+                    }
+                });
+                return true;
+
             default:
                 sendResponse({ success: false, error: 'Unknown action' });
         }
@@ -159,3 +260,13 @@ class BackgroundController {
 
 // Initialize background controller
 new BackgroundController();
+
+function arrayBufferToBase64(buffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+}

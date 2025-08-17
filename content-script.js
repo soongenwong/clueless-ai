@@ -51,7 +51,21 @@ class CluelessAI {
         this.stopGuidance();
         
         // Find elements based on guidance
-        const elements = this.findElements(guidance.elements);
+        let elements = this.findElements(guidance.elements);
+        
+        if (elements.length === 0) {
+            // Try AI-powered selector suggestions from background (GROQ / llama-3.1-8b-instant)
+            try {
+                const pageSnippet = document.documentElement.innerText.slice(0, 2000); // small context
+                const resp = await this.requestAISuggestions(originalRequest, pageSnippet);
+                if (resp && resp.selectors && resp.selectors.length > 0) {
+                    console.log('AI suggested selectors:', resp.selectors);
+                    elements = this.findElements(resp.selectors);
+                }
+            } catch (err) {
+                console.warn('AI selector request failed:', err);
+            }
+        }
         
         if (elements.length === 0) {
             this.speak("Sorry, I couldn't find what you're looking for on this page.");
@@ -264,29 +278,70 @@ class CluelessAI {
     }
     
     speak(text) {
+        // Prefer ElevenLabs TTS via background service worker. If that fails, fall back to Web Speech API.
+        // Send message to background to generate audio with ElevenLabs (eleven_flash_v2_5).
+        try {
+            // Ask background to synthesize and return base64 audio
+            chrome.runtime.sendMessage({ action: 'ELEVEN_TTS', text }, (response) => {
+                if (response && response.success && response.audioBase64) {
+                    this.playAudioFromBase64(response.audioBase64);
+                } else {
+                    // Fallback to Web Speech API
+                    if (!this.speechSynthesis) return;
+                    this._webSpeechSpeak(text);
+                }
+            });
+        } catch (err) {
+            console.warn('Eleven TTS request error, falling back to WebSpeech:', err);
+            this._webSpeechSpeak(text);
+        }
+    }
+
+    _webSpeechSpeak(text) {
         if (!this.speechSynthesis) return;
-        
-        // Cancel any ongoing speech
         this.speechSynthesis.cancel();
-        
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.rate = 0.9;
         utterance.pitch = 1;
         utterance.volume = 0.8;
-        
-        // Try to use a pleasant voice
         const voices = this.speechSynthesis.getVoices();
         const preferredVoice = voices.find(voice => 
             voice.name.includes('Google') || 
             voice.name.includes('Alex') || 
             voice.name.includes('Samantha')
         );
-        
-        if (preferredVoice) {
-            utterance.voice = preferredVoice;
-        }
-        
+        if (preferredVoice) utterance.voice = preferredVoice;
         this.speechSynthesis.speak(utterance);
+    }
+
+    playAudioFromBase64(base64) {
+        try {
+            const audio = new Audio('data:audio/mpeg;base64,' + base64);
+            audio.play().catch(err => console.warn('Audio play failed:', err));
+        } catch (err) {
+            console.warn('Failed to play base64 audio:', err);
+        }
+    }
+
+    requestAISuggestions(originalRequest, pageSnippet) {
+        return new Promise((resolve) => {
+            try {
+                chrome.runtime.sendMessage({
+                    action: 'AI_SUGGEST_SELECTORS',
+                    requestText: originalRequest,
+                    pageSnippet: pageSnippet
+                }, (response) => {
+                    if (response && response.success && response.selectors) {
+                        resolve({ selectors: response.selectors });
+                    } else {
+                        resolve({ selectors: [] });
+                    }
+                });
+            } catch (err) {
+                console.warn('requestAISuggestions error:', err);
+                resolve({ selectors: [] });
+            }
+        });
     }
     
     showNotification(title, message, type = 'info') {

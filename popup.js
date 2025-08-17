@@ -10,11 +10,15 @@ class PopupController {
         this.startGuideBtn = document.getElementById('startGuide');
         this.stopGuideBtn = document.getElementById('stopGuide');
         this.statusDiv = document.getElementById('status');
+        this.groqKeyInput = document.getElementById('groqKey');
+        this.elevenKeyInput = document.getElementById('elevenKey');
+        this.saveKeysBtn = document.getElementById('saveKeys');
     }
     
     bindEvents() {
         this.startGuideBtn.addEventListener('click', () => this.startGuide());
         this.stopGuideBtn.addEventListener('click', () => this.stopGuide());
+        this.saveKeysBtn.addEventListener('click', () => this.saveKeys());
         
         // Allow Enter key to trigger guide
         this.userRequestInput.addEventListener('keypress', (e) => {
@@ -25,6 +29,12 @@ class PopupController {
         
         // Focus input on popup open
         this.userRequestInput.focus();
+
+        // Load saved keys
+        chrome.storage.local.get(['groq_api_key', 'eleven_api_key'], (result) => {
+            if (result.groq_api_key) this.groqKeyInput.value = result.groq_api_key;
+            if (result.eleven_api_key) this.elevenKeyInput.value = result.eleven_api_key;
+        });
     }
     
     async startGuide() {
