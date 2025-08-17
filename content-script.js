@@ -56,7 +56,7 @@ class CluelessAI {
         if (elements.length === 0) {
             // Try AI-powered selector suggestions from background (natural-language parsing via GROQ)
             try {
-                const pageSnippet = document.documentElement.innerText.slice(0, 2000); // small context
+                const pageSnippet = this.getPageContext();
                 const resp = await this.requestAISuggestions(originalRequest, pageSnippet);
                 if (resp && resp.selectors && resp.selectors.length > 0) {
                     console.log('AI suggested selectors:', resp.selectors);
@@ -67,10 +67,20 @@ class CluelessAI {
                 console.warn('AI selector request failed:', err);
             }
         }
+
+        // If still no elements, try smart text-based search
+        if (elements.length === 0) {
+            elements = this.smartTextSearch(originalRequest);
+            if (elements.length > 0) {
+                // Update message to be more specific about what was found
+                const elementType = this.getElementDescription(elements[0]);
+                guidance.message = `Found ${elementType} containing "${originalRequest}"`;
+            }
+        }
         
         if (elements.length === 0) {
-            this.speak("Sorry, I couldn't find what you're looking for on this page.");
-            this.showNotification("Element not found", "I couldn't locate the requested element on this page. Try being more specific!", "error");
+            this.speak("Sorry, I couldn't find what you're looking for on this page. Could you try being more specific?");
+            this.showNotification("Element not found", `I couldn't locate "${originalRequest}" on this page. Try describing it differently or being more specific!`, "error");
             return;
         }
         
@@ -206,15 +216,22 @@ class CluelessAI {
         const isInteractive = this.isInteractiveElement(targetElement);
         const actionText = this.getActionText(targetElement);
         
-        // Scroll element into view
-        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Scroll element into view with better positioning
+        targetElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center',
+            inline: 'center'
+        });
+        
+        // Calculate optimal attachment position
+        const attachmentPosition = this.getOptimalAttachmentPosition(targetElement);
         
         // Create tour using Shepherd.js
         this.currentTour = new Shepherd.Tour({
             useModalOverlay: true,
             defaultStepOptions: {
                 classes: 'clueless-ai-step',
-                scrollTo: true,
+                scrollTo: { behavior: 'smooth', block: 'center' },
                 cancelIcon: {
                     enabled: true
                 }
@@ -234,16 +251,19 @@ class CluelessAI {
             `,
             attachTo: {
                 element: targetElement,
-                on: 'top'
+                on: attachmentPosition
             },
             buttons: [
                 {
                     text: isInteractive ? 'Click It!' : 'Got it!',
                     action: () => {
                         if (isInteractive) {
-                            // Simulate a click on the element
-                            targetElement.click();
-                            this.speak("I clicked it for you!");
+                            // Highlight the element more before clicking
+                            this.flashElement(targetElement);
+                            setTimeout(() => {
+                                targetElement.click();
+                                this.speak("I clicked it for you!");
+                            }, 500);
                         }
                         this.currentTour.complete();
                         this.speak("Great! Let me know if you need help with anything else.");
@@ -263,14 +283,99 @@ class CluelessAI {
         // Start the tour
         this.currentTour.start();
         
-        // Add highlighting effect
-        this.highlightElement(targetElement);
+        // Add highlighting effect with precise pointing
+        this.highlightElementPrecisely(targetElement);
         
         // Speak the guidance
         this.speak(message + (isInteractive ? ` ${actionText}` : ''));
         
         // Show notification
         this.showNotification("Found it!", message, "success");
+    }
+
+    getOptimalAttachmentPosition(element) {
+        const rect = element.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // Calculate available space in each direction
+        const spaceTop = rect.top;
+        const spaceBottom = viewportHeight - rect.bottom;
+        const spaceLeft = rect.left;
+        const spaceRight = viewportWidth - rect.right;
+        
+        // Choose position based on available space
+        if (spaceTop > 200) return 'top';
+        if (spaceBottom > 200) return 'bottom';
+        if (spaceRight > 300) return 'right';
+        if (spaceLeft > 300) return 'left';
+        
+        // Fallback to position with most space
+        const maxSpace = Math.max(spaceTop, spaceBottom, spaceLeft, spaceRight);
+        if (maxSpace === spaceTop) return 'top';
+        if (maxSpace === spaceBottom) return 'bottom';
+        if (maxSpace === spaceRight) return 'right';
+        return 'left';
+    }
+
+    highlightElementPrecisely(element) {
+        // Remove existing highlights
+        document.querySelectorAll('.clueless-ai-highlight, .clueless-ai-pointer').forEach(el => {
+            el.classList.remove('clueless-ai-highlight', 'clueless-ai-pointer');
+        });
+        
+        // Add precise highlight class
+        element.classList.add('clueless-ai-highlight');
+        
+        // Create a pointer arrow that points directly to the element
+        this.createPointerArrow(element);
+        
+        // Remove highlight after tour
+        setTimeout(() => {
+            element.classList.remove('clueless-ai-highlight');
+            this.removePointerArrow();
+        }, 10000);
+    }
+
+    createPointerArrow(element) {
+        const rect = element.getBoundingClientRect();
+        const arrow = document.createElement('div');
+        arrow.className = 'clueless-ai-pointer-arrow';
+        arrow.innerHTML = '👆';
+        
+        // Position the arrow to point at the element
+        arrow.style.cssText = `
+            position: fixed;
+            z-index: 10001;
+            font-size: 24px;
+            animation: clueless-ai-bounce 1s infinite;
+            pointer-events: none;
+            left: ${rect.left + rect.width / 2 - 12}px;
+            top: ${rect.top - 30}px;
+        `;
+        
+        document.body.appendChild(arrow);
+        
+        // Store reference for cleanup
+        this.currentPointerArrow = arrow;
+    }
+
+    removePointerArrow() {
+        if (this.currentPointerArrow) {
+            this.currentPointerArrow.remove();
+            this.currentPointerArrow = null;
+        }
+    }
+
+    flashElement(element) {
+        element.style.transition = 'all 0.3s ease';
+        element.style.transform = 'scale(1.05)';
+        element.style.boxShadow = '0 0 20px #ff6b6b';
+        
+        setTimeout(() => {
+            element.style.transform = '';
+            element.style.boxShadow = '';
+        }, 300);
     }
 
     getActionText(element) {
@@ -430,6 +535,135 @@ class CluelessAI {
                 resolve({ selectors: [], message: null });
             }
         });
+    }
+
+    getPageContext() {
+        // Get more relevant page context for AI processing
+        const titleText = document.title || '';
+        const headingTexts = Array.from(document.querySelectorAll('h1, h2, h3')).map(h => h.textContent).join(' ');
+        const buttonTexts = Array.from(document.querySelectorAll('button, [role="button"]')).map(b => b.textContent).slice(0, 10).join(' ');
+        const linkTexts = Array.from(document.querySelectorAll('a')).map(a => a.textContent).slice(0, 10).join(' ');
+        const inputLabels = Array.from(document.querySelectorAll('label, input')).map(i => i.textContent || i.placeholder || i.getAttribute('aria-label')).filter(Boolean).slice(0, 10).join(' ');
+        
+        return `Title: ${titleText} | Headings: ${headingTexts} | Buttons: ${buttonTexts} | Links: ${linkTexts} | Inputs: ${inputLabels}`.slice(0, 2000);
+    }
+
+    smartTextSearch(searchTerm) {
+        console.log('Performing smart text search for:', searchTerm);
+        
+        // Extract keywords from the search term (same logic as popup)
+        const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'how', 'where', 'what', 'when', 'why', 'can', 'could', 'should', 'would', 'find', 'show', 'help', 'me', 'i', 'want', 'need']);
+        
+        const keywords = searchTerm.toLowerCase()
+            .replace(/[^\w\s]/g, ' ')
+            .split(/\s+/)
+            .filter(word => word.length > 2 && !stopWords.has(word));
+        
+        console.log('Keywords extracted:', keywords);
+        
+        const foundElements = new Set();
+        
+        // Search strategy 1: Exact keyword matches in text content
+        keywords.forEach(keyword => {
+            const exactMatches = this.findElementsContainingText(keyword, true);
+            exactMatches.forEach(el => foundElements.add(el));
+        });
+        
+        // Search strategy 2: Partial keyword matches in text content
+        keywords.forEach(keyword => {
+            const partialMatches = this.findElementsContainingText(keyword, false);
+            partialMatches.forEach(el => foundElements.add(el));
+        });
+        
+        // Search strategy 3: Attribute-based search
+        keywords.forEach(keyword => {
+            const attrElements = document.querySelectorAll(`
+                [aria-label*="${keyword}" i],
+                [placeholder*="${keyword}" i],
+                [title*="${keyword}" i],
+                [alt*="${keyword}" i],
+                [data-testid*="${keyword}" i],
+                [class*="${keyword}" i],
+                [id*="${keyword}" i],
+                [name*="${keyword}" i],
+                [value*="${keyword}" i]
+            `);
+            
+            Array.from(attrElements).forEach(el => foundElements.add(el));
+        });
+        
+        // Convert Set to Array and filter
+        const elementsArray = Array.from(foundElements);
+        const visibleElements = elementsArray.filter(el => this.isElementVisible(el));
+        const prioritizedElements = this.prioritizeInteractiveElements(visibleElements);
+        
+        console.log(`Found ${prioritizedElements.length} elements for keywords: ${keywords.join(', ')}`);
+        return prioritizedElements;
+    }
+
+    findElementsContainingText(keyword, exactMatch = false) {
+        const elements = [];
+        const allElements = document.querySelectorAll('*');
+        
+        for (const element of allElements) {
+            // Skip elements with children (we want leaf nodes for text content)
+            if (element.children.length > 0) continue;
+            
+            const text = element.textContent?.trim().toLowerCase();
+            if (!text) continue;
+            
+            let isMatch = false;
+            if (exactMatch) {
+                // Look for the keyword as a whole word
+                const regex = new RegExp(`\\b${keyword}\\b`, 'i');
+                isMatch = regex.test(text);
+            } else {
+                // Look for the keyword as a substring
+                isMatch = text.includes(keyword.toLowerCase());
+            }
+            
+            if (isMatch) {
+                // Also check parent elements for interactivity
+                let targetElement = element;
+                let parent = element.parentElement;
+                
+                // Walk up the DOM to find the nearest interactive parent
+                while (parent && parent !== document.body) {
+                    if (this.isInteractiveElement(parent)) {
+                        targetElement = parent;
+                        break;
+                    }
+                    parent = parent.parentElement;
+                }
+                
+                elements.push(targetElement);
+            }
+        }
+        
+        return elements;
+    }
+
+    getElementDescription(element) {
+        const tagName = element.tagName.toLowerCase();
+        const text = element.textContent?.trim().slice(0, 30) || '';
+        
+        if (tagName === 'button') {
+            return `button "${text}"`;
+        } else if (tagName === 'a') {
+            return `link "${text}"`;
+        } else if (tagName === 'input') {
+            const type = element.getAttribute('type') || 'text';
+            const placeholder = element.getAttribute('placeholder') || '';
+            return `${type} input ${placeholder ? `"${placeholder}"` : ''}`;
+        } else if (tagName === 'select') {
+            return 'dropdown menu';
+        } else if (element.getAttribute('role') === 'button') {
+            return `clickable element "${text}"`;
+        } else if (this.isInteractiveElement(element)) {
+            return `interactive element "${text}"`;
+        } else {
+            return `element containing "${text}"`;
+        }
     }
     
     showNotification(title, message, type = 'info') {

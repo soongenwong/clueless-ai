@@ -122,56 +122,123 @@ class PopupController {
     processUserRequest(request) {
         const lowercaseRequest = request.toLowerCase();
         
-        // Simple keyword-based NLP for hackathon
-        const patterns = {
-            search: {
-                keywords: ['search', 'find something', 'look for', 'search box', 'search bar'],
-                elements: ['input[placeholder*="search" i]', 'input[aria-label*="search" i]', '[role="searchbox"]', 'input[type="search"]'],
-                message: 'Here\'s the search functionality!'
-            },
-            login: {
-                keywords: ['login', 'log in', 'sign in', 'signin', 'account', 'user'],
-                elements: ['a[href*="login" i]', 'a[href*="signin" i]', 'button:contains("Login")', 'button:contains("Sign in")', '[data-testid*="login" i]'],
-                message: 'Here\'s how you can sign in!'
-            },
-            menu: {
-                keywords: ['menu', 'navigation', 'nav', 'hamburger', 'sidebar'],
-                elements: ['nav', '[role="navigation"]', '.menu', '.nav', '.navbar', 'button[aria-label*="menu" i]'],
-                message: 'Here\'s the navigation menu!'
-            },
-            checkout: {
-                keywords: ['checkout', 'cart', 'buy', 'purchase', 'order', 'payment'],
-                elements: ['button:contains("Checkout")', 'a[href*="checkout" i]', '[data-testid*="cart" i]', '.cart', 'button:contains("Buy")'],
-                message: 'Here\'s the checkout process!'
-            },
-            contact: {
-                keywords: ['contact', 'help', 'support', 'customer service', 'get in touch'],
-                elements: ['a[href*="contact" i]', 'a[href*="support" i]', 'button:contains("Contact")', '[data-testid*="contact" i]'],
-                message: 'Here\'s the contact information!'
+        // Extract keywords from the user's request
+        const keywords = this.extractKeywords(request);
+        console.log('Extracted keywords:', keywords);
+        
+        // Generate smart selectors based on actual keywords from the request
+        const smartSelectors = this.generateKeywordBasedSelectors(keywords);
+        
+        // Also add pattern-based selectors as fallback
+        const patternSelectors = this.getPatternSelectors(lowercaseRequest);
+        
+        // Combine both approaches - keyword-based first, then pattern-based
+        const allSelectors = [...smartSelectors, ...patternSelectors];
+        
+        return {
+            type: 'keyword-based',
+            elements: allSelectors,
+            message: `Looking for "${keywords.join(', ')}" on this page...`,
+            originalRequest: request,
+            keywords: keywords
+        };
+    }
+
+    extractKeywords(request) {
+        // Remove common stop words and extract meaningful keywords
+        const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'how', 'where', 'what', 'when', 'why', 'can', 'could', 'should', 'would', 'find', 'show', 'help', 'me', 'i', 'want', 'need']);
+        
+        const words = request.toLowerCase()
+            .replace(/[^\w\s]/g, ' ') // Replace punctuation with spaces
+            .split(/\s+/)
+            .filter(word => word.length > 2 && !stopWords.has(word));
+        
+        return [...new Set(words)]; // Remove duplicates
+    }
+
+    generateKeywordBasedSelectors(keywords) {
+        const selectors = [];
+        
+        keywords.forEach(keyword => {
+            // Direct text content searches (most important)
+            selectors.push(`*:contains("${keyword}")`);
+            selectors.push(`button:contains("${keyword}")`);
+            selectors.push(`a:contains("${keyword}")`);
+            selectors.push(`input[value*="${keyword}" i]`);
+            selectors.push(`label:contains("${keyword}")`);
+            
+            // Attribute-based searches
+            selectors.push(`[aria-label*="${keyword}" i]`);
+            selectors.push(`[placeholder*="${keyword}" i]`);
+            selectors.push(`[title*="${keyword}" i]`);
+            selectors.push(`[alt*="${keyword}" i]`);
+            selectors.push(`[data-testid*="${keyword}" i]`);
+            selectors.push(`[class*="${keyword}" i]`);
+            selectors.push(`[id*="${keyword}" i]`);
+            selectors.push(`[name*="${keyword}" i]`);
+            selectors.push(`[href*="${keyword}" i]`);
+            
+            // Form-specific searches
+            selectors.push(`input[type="submit"][value*="${keyword}" i]`);
+            selectors.push(`button[type="submit"]:contains("${keyword}")`);
+            
+            // Variations and partial matches
+            if (keyword.length > 3) {
+                const partial = keyword.substring(0, Math.floor(keyword.length * 0.7));
+                selectors.push(`*:contains("${partial}")`);
+                selectors.push(`[class*="${partial}" i]`);
+                selectors.push(`[id*="${partial}" i]`);
             }
+        });
+        
+        return selectors;
+    }
+
+    getPatternSelectors(lowercaseRequest) {
+        // Simplified pattern matching as fallback
+        const patterns = {
+            search: ['search', 'find', 'look', 'query'],
+            login: ['login', 'signin', 'sign', 'account', 'auth'],
+            menu: ['menu', 'nav', 'navigation', 'hamburger'],
+            cart: ['cart', 'checkout', 'buy', 'purchase', 'order'],
+            contact: ['contact', 'help', 'support', 'chat'],
+            settings: ['settings', 'preferences', 'options', 'config'],
+            profile: ['profile', 'account', 'user']
         };
         
-        // Find matching pattern
-        for (const [key, pattern] of Object.entries(patterns)) {
-            if (pattern.keywords.some(keyword => lowercaseRequest.includes(keyword))) {
-                return {
-                    type: key,
-                    elements: pattern.elements,
-                    message: pattern.message,
-                    originalRequest: request
-                };
+        const selectors = [];
+        
+        for (const [category, keywords] of Object.entries(patterns)) {
+            if (keywords.some(keyword => lowercaseRequest.includes(keyword))) {
+                switch (category) {
+                    case 'search':
+                        selectors.push('input[placeholder*="search" i]', '[role="searchbox"]', 'input[type="search"]');
+                        break;
+                    case 'login':
+                        selectors.push('a[href*="login" i]', 'button:contains("Login")', 'button:contains("Sign in")');
+                        break;
+                    case 'menu':
+                        selectors.push('nav', '[role="navigation"]', 'button[aria-label*="menu" i]');
+                        break;
+                    case 'cart':
+                        selectors.push('button:contains("Checkout")', 'a[href*="cart" i]', 'button:contains("Buy")');
+                        break;
+                    case 'contact':
+                        selectors.push('a[href*="contact" i]', 'button:contains("Contact")', 'a[href*="support" i]');
+                        break;
+                    case 'settings':
+                        selectors.push('a[href*="settings" i]', 'button:contains("Settings")');
+                        break;
+                    case 'profile':
+                        selectors.push('a[href*="profile" i]', 'button:contains("Profile")');
+                        break;
+                }
             }
         }
         
-        // Default fallback - try to find elements based on the text
-        return {
-            type: 'generic',
-            elements: [`*:contains("${request}")`, `[aria-label*="${request}" i]`, `[placeholder*="${request}" i]`],
-            message: `Let me help you find: ${request}`,
-            originalRequest: request
-        };
+        return selectors;
     }
-    
+
     showStatus(message, type) {
         this.statusDiv.textContent = message;
         this.statusDiv.className = `status ${type}`;
