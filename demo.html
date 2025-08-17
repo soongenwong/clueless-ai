@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clueless AI Demo Page</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .nav {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .nav ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            gap: 20px;
+        }
+        
+        .nav a {
+            text-decoration: none;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .search-section {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .search-bar {
+            width: 100%;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        
+        .login-section {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 400px;
+            margin: 30px auto;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        
+        .btn-success {
+            background: #28a745;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+        }
+        
+        .content-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+        }
+        
+        .shopping-cart {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            text-decoration: none;
+        }
+        
+        .contact-info {
+            background: #e9ecef;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+        }
+        
+        .demo-instructions {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .demo-instructions h3 {
+            color: #856404;
+            margin-top: 0;
+        }
+        
+        .demo-instructions ul {
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-instructions">
+        <h3>🤖 Clueless AI Demo Instructions</h3>
+        <p>This page is designed to test the Clueless AI browser extension. Try these commands:</p>
+        <ul>
+            <li><strong>"Find the search bar"</strong> - Should highlight the search input below</li>
+            <li><strong>"Help me login"</strong> - Should find the login form</li>
+            <li><strong>"Where is the menu?"</strong> - Should highlight the navigation</li>
+            <li><strong>"Show me the shopping cart"</strong> - Should find the cart button</li>
+            <li><strong>"Find contact information"</strong> - Should locate contact details</li>
+        </ul>
+        <p><em>Install the Clueless AI extension and click its icon to get started!</em></p>
+    </div>
+
+    <div class="header">
+        <h1>🛍️ Demo E-Commerce Site</h1>
+        <p>Perfect for testing AI-powered web assistance</p>
+    </div>
+
+    <nav class="nav">
+        <ul>
+            <li><a href="#home">Home</a></li>
+            <li><a href="#products">Products</a></li>
+            <li><a href="#about">About</a></li>
+            <li><a href="#contact">Contact</a></li>
+            <li><a href="#support">Support</a></li>
+        </ul>
+    </nav>
+
+    <a href="#cart" class="shopping-cart">🛒 Cart (3)</a>
+
+    <div class="search-section">
+        <h2>Search Products</h2>
+        <input type="text" class="search-bar" placeholder="Search for products, brands, or categories..." aria-label="Product search">
+        <button class="btn">Search</button>
+    </div>
+
+    <div class="content-section">
+        <h2>Welcome to Our Store!</h2>
+        <p>Find everything you need with our AI-powered shopping assistant. Browse our categories or use the search above.</p>
+        
+        <div style="display: flex; gap: 20px; margin-top: 20px;">
+            <button class="btn">Browse Electronics</button>
+            <button class="btn btn-success">View Deals</button>
+            <button class="btn btn-danger">Sale Items</button>
+        </div>
+    </div>
+
+    <div class="login-section">
+        <h3>Sign In to Your Account</h3>
+        <form>
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" placeholder="Enter your email">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" placeholder="Enter your password">
+            </div>
+            <button type="submit" class="btn">Sign In</button>
+            <button type="button" class="btn" style="background: #6c757d;">Create Account</button>
+        </form>
+    </div>
+
+    <div class="content-section">
+        <h2>Featured Products</h2>
+        <p>Check out our bestselling items and new arrivals. Each product comes with free shipping and our satisfaction guarantee.</p>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 20px;">
+            <div style="border: 1px solid #ddd; padding: 15px; border-radius: 8px;">
+                <h4>Wireless Headphones</h4>
+                <p>$99.99</p>
+                <button class="btn btn-success">Add to Cart</button>
+            </div>
+            <div style="border: 1px solid #ddd; padding: 15px; border-radius: 8px;">
+                <h4>Smart Watch</h4>
+                <p>$199.99</p>
+                <button class="btn btn-success">Add to Cart</button>
+            </div>
+            <div style="border: 1px solid #ddd; padding: 15px; border-radius: 8px;">
+                <h4>Laptop Bag</h4>
+                <p>$49.99</p>
+                <button class="btn btn-success">Add to Cart</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="contact-info">
+        <h3>Contact Information</h3>
+        <p><strong>Customer Service:</strong> 1-800-DEMO-AI</p>
+        <p><strong>Email:</strong> support@demo-store.com</p>
+        <p><strong>Live Chat:</strong> Available 24/7</p>
+        <p><strong>Store Hours:</strong> Mon-Fri 9AM-6PM PST</p>
+        
+        <button class="btn">Contact Support</button>
+        <button class="btn" style="background: #17a2b8;">Live Chat</button>
+    </div>
+
+    <div class="content-section">
+        <h2>Need Help?</h2>
+        <p>Our AI assistant can help you navigate this site and find exactly what you're looking for. Just click the Clueless AI extension icon and tell it what you need!</p>
+        
+        <h4>Common Requests:</h4>
+        <ul>
+            <li>"Where can I track my order?"</li>
+            <li>"How do I return an item?"</li>
+            <li>"Find the customer reviews"</li>
+            <li>"Show me the checkout process"</li>
+            <li>"Where are the shipping options?"</li>
+        </ul>
+    </div>
+</body>
+</html>
