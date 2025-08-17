@@ -1,0 +1,217 @@
+/* Custom styles for Clueless AI extension */
+
+/* Highlight effect for found elements */
+.clueless-ai-highlight {
+    animation: clueless-ai-pulse 2s infinite;
+    box-shadow: 0 0 0 4px rgba(66, 165, 245, 0.5) !important;
+    border-radius: 4px !important;
+    transition: all 0.3s ease !important;
+}
+
+@keyframes clueless-ai-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(66, 165, 245, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(66, 165, 245, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(66, 165, 245, 0);
+    }
+}
+
+/* Custom Shepherd.js step styling */
+.clueless-ai-step .shepherd-element {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    border: none;
+    max-width: 400px;
+}
+
+.clueless-ai-step .shepherd-header {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px 12px 0 0;
+    padding: 15px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.clueless-ai-step .shepherd-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin: 0;
+    color: white;
+}
+
+.clueless-ai-step .shepherd-text {
+    padding: 20px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.clueless-ai-step-content p {
+    margin: 0 0 10px 0;
+}
+
+.clueless-ai-step-content p:last-child {
+    margin-bottom: 0;
+}
+
+.clueless-ai-step .shepherd-footer {
+    padding: 15px 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 0 0 12px 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.clueless-ai-step .shepherd-button {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    margin-right: 10px;
+    transition: all 0.2s;
+}
+
+.clueless-ai-step .shepherd-button:hover {
+    background: #45a049;
+    transform: translateY(-1px);
+}
+
+.clueless-ai-step .shepherd-button-secondary {
+    background: #f44336;
+}
+
+.clueless-ai-step .shepherd-button-secondary:hover {
+    background: #da190b;
+}
+
+.clueless-ai-step .shepherd-cancel-icon {
+    color: white;
+    font-size: 20px;
+    opacity: 0.7;
+}
+
+.clueless-ai-step .shepherd-cancel-icon:hover {
+    opacity: 1;
+}
+
+/* Notification styles */
+.clueless-ai-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    z-index: 10000;
+    min-width: 300px;
+    max-width: 400px;
+    border-left: 4px solid #2196F3;
+    animation: slideInRight 0.3s ease;
+}
+
+.clueless-ai-notification.success {
+    border-left-color: #4CAF50;
+}
+
+.clueless-ai-notification.error {
+    border-left-color: #f44336;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.notification-header {
+    display: flex;
+    align-items: center;
+    padding: 15px 20px 10px 20px;
+    font-weight: bold;
+    color: #333;
+}
+
+.notification-icon {
+    margin-right: 10px;
+    font-size: 16px;
+}
+
+.notification-title {
+    flex: 1;
+}
+
+.notification-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #999;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.notification-close:hover {
+    color: #333;
+}
+
+.notification-message {
+    padding: 0 20px 15px 20px;
+    color: #666;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+/* Extension indicator */
+.clueless-ai-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: white;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    z-index: 9999;
+    cursor: pointer;
+    animation: bounceIn 0.5s ease;
+}
+
+@keyframes bounceIn {
+    0% {
+        transform: scale(0);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Ensure our styles take precedence */
+.clueless-ai-step .shepherd-element,
+.clueless-ai-notification,
+.clueless-ai-indicator {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif !important;
+}
