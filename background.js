@@ -171,6 +171,83 @@ Respond only with JSON:`;
                 });
                 return true;
 
+            case 'SUMMARIZE_PAGE_CONTENT':
+                // Use GROQ API with model llama-3.1-8b-instant to summarize page content
+                chrome.storage.local.get(['groq_api_key'], async (items) => {
+                    const apiKey = items.groq_api_key;
+                    if (!apiKey) {
+                        sendResponse({ success: false, error: 'missing_groq_api_key' });
+                        return;
+                    }
+
+                    try {
+                        const pageContent = request.pageContent || {};
+                        
+                        // Create a comprehensive prompt for page summarization
+                        const prompt = `You are an AI assistant that creates helpful summaries of web pages. Analyze the provided page content and create a concise but informative summary that tells the user what this page is about and what they can do on it.
+
+Page Title: ${pageContent.title || 'Unknown'}
+URL: ${pageContent.url || 'Unknown'}
+Headings: ${pageContent.headings ? pageContent.headings.map(h => h.text).join(', ') : 'None'}
+Main Text: ${(pageContent.mainText || '').substring(0, 1500)}
+Navigation Links: ${pageContent.links ? pageContent.links.map(l => l.text).slice(0, 8).join(', ') : 'None'}
+Buttons/Actions: ${pageContent.buttons ? pageContent.buttons.slice(0, 8).join(', ') : 'None'}
+Forms Available: ${pageContent.forms && pageContent.forms.length > 0 ? 'Yes' : 'No'}
+
+Create a JSON response with:
+- "summary": A 2-3 sentence summary of what this page is about and its main purpose
+- "keyPoints": An array of 3-5 key things a user can do on this page (specific actions or features)
+
+Respond ONLY with valid JSON like:
+{"summary": "This is a summary...", "keyPoints": ["Point 1", "Point 2", "Point 3"]}`;
+
+                        const body = { 
+                            prompt, 
+                            max_tokens: 400,
+                            temperature: 0.7
+                        };
+
+                        const resp = await fetch('https://api.groq.ai/v1/models/llama-3.1-8b-instant/completions', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${apiKey}`
+                            },
+                            body: JSON.stringify(body)
+                        });
+
+                        const data = await resp.json();
+
+                        let textOutput = '';
+                        if (typeof data === 'string') textOutput = data;
+                        else if (data.completion) textOutput = data.completion;
+                        else if (data.output && typeof data.output === 'string') textOutput = data.output;
+                        else if (data.choices && data.choices[0]) textOutput = data.choices[0].text || data.choices[0].message?.content || '';
+                        else textOutput = JSON.stringify(data);
+
+                        // Extract JSON from the model output
+                        const jsonMatch = textOutput.match(/\{[\s\S]*\}/);
+                        let summary = "This page contains various content and functionality.";
+                        let keyPoints = [];
+                        
+                        if (jsonMatch) {
+                            try {
+                                const parsed = JSON.parse(jsonMatch[0]);
+                                if (typeof parsed.summary === 'string') summary = parsed.summary;
+                                if (Array.isArray(parsed.keyPoints)) keyPoints = parsed.keyPoints;
+                            } catch (e) {
+                                console.warn('Failed to parse summarization JSON:', e);
+                            }
+                        }
+
+                        sendResponse({ success: true, summary, keyPoints });
+                    } catch (err) {
+                        console.warn('GROQ summarization request failed:', err);
+                        sendResponse({ success: false, error: String(err) });
+                    }
+                });
+                return true;
+
             case 'ELEVEN_TTS':
                 // Use Eleven Labs TTS (eleven_flash_v2_5) to synthesize audio and return base64
                 chrome.storage.local.get(['eleven_api_key', 'eleven_voice_id'], async (items) => {
