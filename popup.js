@@ -9,6 +9,7 @@ class PopupController {
         this.userRequestInput = document.getElementById('userRequest');
         this.startGuideBtn = document.getElementById('startGuide');
         this.stopGuideBtn = document.getElementById('stopGuide');
+        this.summarizePageBtn = document.getElementById('summarizePage');
         this.statusDiv = document.getElementById('status');
         this.groqKeyInput = document.getElementById('groqKey');
         this.elevenKeyInput = document.getElementById('elevenKey');
@@ -34,6 +35,7 @@ class PopupController {
     bindEvents() {
         this.startGuideBtn.addEventListener('click', () => this.startGuide());
         this.stopGuideBtn.addEventListener('click', () => this.stopGuide());
+        this.summarizePageBtn.addEventListener('click', () => this.summarizePage());
         this.saveKeysBtn.addEventListener('click', () => this.saveKeys());
         this.clearKeysBtn.addEventListener('click', () => this.clearKeys());
         this.toggleGroqBtn.addEventListener('click', (e) => this.toggleVisibility(e, this.groqKeyInput));
@@ -116,6 +118,41 @@ class PopupController {
         } catch (error) {
             console.error('Error stopping guide:', error);
             this.showStatus('Error stopping guide!', 'error');
+        }
+    }
+
+    async summarizePage() {
+        try {
+            // Check if GROQ API key is available
+            const result = await new Promise(resolve => {
+                chrome.storage.local.get(['groq_api_key'], resolve);
+            });
+            
+            if (!result.groq_api_key) {
+                this.showStatus('Please save your GROQ API key first!', 'error');
+                return;
+            }
+
+            this.showStatus('Analyzing page content...', 'success');
+            
+            // Get the active tab
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            
+            if (!tab) {
+                this.showStatus('No active tab found!', 'error');
+                return;
+            }
+            
+            // Send message to content script to extract page content
+            await chrome.tabs.sendMessage(tab.id, {
+                action: 'SUMMARIZE_PAGE'
+            });
+            
+            // Don't close popup immediately - let user see the summary
+            
+        } catch (error) {
+            console.error('Error summarizing page:', error);
+            this.showStatus('Error analyzing page. Make sure you\'re on a webpage!', 'error');
         }
     }
     

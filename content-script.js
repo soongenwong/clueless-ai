@@ -39,6 +39,11 @@ class CluelessAI {
                 sendResponse({ success: true });
                 break;
                 
+            case 'SUMMARIZE_PAGE':
+                this.summarizePage();
+                sendResponse({ success: true });
+                break;
+                
             default:
                 sendResponse({ success: false, error: 'Unknown action' });
         }
@@ -105,6 +110,204 @@ class CluelessAI {
         
         this.isActive = false;
         console.log('Guidance stopped');
+    }
+
+    async summarizePage() {
+        console.log('Starting page summarization...');
+        
+        try {
+            // Show initial notification
+            this.showNotification("Analyzing Page", "Extracting and analyzing page content...", "info");
+            
+            // Extract comprehensive page content
+            const pageContent = this.extractPageContent();
+            
+            // Request AI summarization from background script
+            const summary = await this.requestPageSummary(pageContent);
+            
+            if (summary && summary.success) {
+                // Create and show summary tour
+                this.createSummaryTour(summary.summary, summary.keyPoints);
+                
+                // Speak the summary (shorter version)
+                const shortSummary = summary.summary.length > 200 
+                    ? summary.summary.substring(0, 200) + "..."
+                    : summary.summary;
+                this.speak("Here's a summary of this page: " + shortSummary);
+                
+            } else {
+                this.showNotification("Summary Failed", "Unable to generate page summary. Please check your GROQ API key.", "error");
+                this.speak("I'm sorry, I couldn't generate a summary of this page. Please check your API key settings.");
+            }
+            
+        } catch (error) {
+            console.error('Error summarizing page:', error);
+            this.showNotification("Summary Error", "An error occurred while summarizing the page.", "error");
+            this.speak("I encountered an error while trying to summarize this page.");
+        }
+    }
+
+    extractPageContent() {
+        const content = {
+            title: document.title || '',
+            url: window.location.href,
+            headings: [],
+            mainText: '',
+            links: [],
+            buttons: [],
+            forms: [],
+            images: []
+        };
+        
+        // Extract headings (h1-h6)
+        document.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(heading => {
+            content.headings.push({
+                level: parseInt(heading.tagName.charAt(1)),
+                text: heading.textContent.trim()
+            });
+        });
+        
+        // Extract main text content from paragraphs and articles
+        const textElements = document.querySelectorAll('p, article, section, main, .content, .post, .article');
+        const textParts = [];
+        textElements.forEach(el => {
+            const text = el.textContent.trim();
+            if (text.length > 20) { // Only include substantial text
+                textParts.push(text);
+            }
+        });
+        content.mainText = textParts.slice(0, 10).join(' ').substring(0, 2000); // Limit text length
+        
+        // Extract navigation links
+        document.querySelectorAll('nav a, .navigation a, .menu a').forEach(link => {
+            const text = link.textContent.trim();
+            const href = link.getAttribute('href');
+            if (text && href) {
+                content.links.push({ text, href });
+            }
+        });
+        
+        // Extract buttons and interactive elements
+        document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"]').forEach(btn => {
+            const text = btn.textContent.trim() || btn.getAttribute('value') || btn.getAttribute('aria-label') || '';
+            if (text) {
+                content.buttons.push(text);
+            }
+        });
+        
+        // Extract form information
+        document.querySelectorAll('form').forEach(form => {
+            const inputs = Array.from(form.querySelectorAll('input, select, textarea'))
+                .map(input => {
+                    const label = input.getAttribute('placeholder') || 
+                                input.getAttribute('aria-label') || 
+                                input.getAttribute('name') || 
+                                input.getAttribute('id') || '';
+                    const type = input.getAttribute('type') || input.tagName.toLowerCase();
+                    return { type, label };
+                })
+                .filter(input => input.label);
+            
+            if (inputs.length > 0) {
+                content.forms.push({ inputs });
+            }
+        });
+        
+        // Extract image alt texts
+        document.querySelectorAll('img[alt]').forEach(img => {
+            const alt = img.getAttribute('alt').trim();
+            if (alt) {
+                content.images.push(alt);
+            }
+        });
+        
+        return content;
+    }
+
+    async requestPageSummary(pageContent) {
+        return new Promise((resolve) => {
+            try {
+                chrome.runtime.sendMessage({
+                    action: 'SUMMARIZE_PAGE_CONTENT',
+                    pageContent: pageContent
+                }, (response) => {
+                    resolve(response || { success: false });
+                });
+            } catch (err) {
+                console.warn('requestPageSummary error:', err);
+                resolve({ success: false });
+            }
+        });
+    }
+
+    createSummaryTour(summary, keyPoints) {
+        // Stop any existing tour
+        this.stopGuidance();
+        
+        // Create a new tour for the summary
+        this.currentTour = new Shepherd.Tour({
+            useModalOverlay: true,
+            defaultStepOptions: {
+                classes: 'clueless-ai-step clueless-ai-summary-step',
+                scrollTo: false, // Don't scroll for summary
+                cancelIcon: {
+                    enabled: true
+                }
+            }
+        });
+        
+        // Format key points as bullet list if available
+        const keyPointsHtml = keyPoints && keyPoints.length > 0 
+            ? '<ul>' + keyPoints.map(point => `<li>${point}</li>`).join('') + '</ul>'
+            : '';
+        
+        this.currentTour.addStep({
+            title: '📄 Page Summary',
+            text: `
+                <div class="clueless-ai-summary-content">
+                    <div class="summary-text">
+                        <h4>Summary:</h4>
+                        <p>${summary}</p>
+                    </div>
+                    ${keyPointsHtml ? `
+                        <div class="key-points">
+                            <h4>Key Points:</h4>
+                            ${keyPointsHtml}
+                        </div>
+                    ` : ''}
+                    <div class="summary-footer">
+                        <small>💡 This summary was generated by AI based on the page content.</small>
+                    </div>
+                </div>
+            `,
+            attachTo: {
+                element: 'body',
+                on: 'top'
+            },
+            buttons: [
+                {
+                    text: 'Got it!',
+                    action: () => {
+                        this.currentTour.complete();
+                        this.speak("That's the summary! Let me know if you need help finding anything specific on this page.");
+                    },
+                    classes: 'shepherd-button-primary'
+                },
+                {
+                    text: 'Read Aloud',
+                    action: () => {
+                        this.speak(summary);
+                    },
+                    classes: 'shepherd-button-secondary'
+                }
+            ]
+        });
+        
+        // Start the tour
+        this.currentTour.start();
+        
+        // Update notification
+        this.showNotification("Summary Ready", "Page summary generated successfully!", "success");
     }
     
     findElements(selectors) {
