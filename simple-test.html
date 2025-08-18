@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extension Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            line-height: 1.6;
+        }
+        .header {
+            background: #f4f4f4;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .content {
+            margin: 20px 0;
+        }
+        button {
+            background: #007cba;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #005a84;
+        }
+        .search-box {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 300px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Test Page for Clueless AI Extension</h1>
+        <p>This is a simple test page to verify the extension functionality.</p>
+    </div>
+    
+    <div class="content">
+        <h2>Welcome to the Test Page</h2>
+        <p>This page contains various elements that you can test with the Clueless AI extension:</p>
+        
+        <h3>Search and Navigation</h3>
+        <input type="text" class="search-box" placeholder="Search for something..." aria-label="Search box">
+        <button type="button">Search</button>
+        
+        <h3>User Actions</h3>
+        <button type="button">Login</button>
+        <button type="button">Sign Up</button>
+        <button type="button">Contact Us</button>
+        <button type="button">View Cart</button>
+        
+        <h3>Navigation Menu</h3>
+        <nav>
+            <a href="#home">Home</a> |
+            <a href="#about">About</a> |
+            <a href="#services">Services</a> |
+            <a href="#contact">Contact</a>
+        </nav>
+        
+        <h3>Form Elements</h3>
+        <form>
+            <label for="email">Email:</label><br>
+            <input type="email" id="email" name="email" placeholder="Enter your email"><br><br>
+            
+            <label for="message">Message:</label><br>
+            <textarea id="message" name="message" rows="4" cols="50" placeholder="Enter your message"></textarea><br><br>
+            
+            <button type="submit">Submit</button>
+            <button type="button">Cancel</button>
+        </form>
+        
+        <h3>Testing Instructions</h3>
+        <ol>
+            <li>Click the Clueless AI extension icon</li>
+            <li>Click "🔧 Test Connection" to verify the extension is working</li>
+            <li>Try searching for elements like "search box", "login button", or "contact form"</li>
+            <li>Use the "📄 Summarize Page" feature to get a summary of this page</li>
+        </ol>
+        
+        <p><strong>Note:</strong> Make sure you have your GROQ API key saved in the extension for AI features to work.</p>
+    </div>
+</body>
+</html>

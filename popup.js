@@ -17,6 +17,13 @@ class PopupController {
         this.toggleGroqBtn = document.getElementById('toggleGroq');
         this.toggleElevenBtn = document.getElementById('toggleEleven');
 
+        // Summary section elements
+        this.summarySection = document.getElementById('summarySection');
+        this.summaryContent = document.getElementById('summaryContent');
+        this.summaryClose = document.getElementById('summaryClose');
+        this.closeSummary = document.getElementById('closeSummary');
+        this.readAloud = document.getElementById('readAloud');
+
         // Add Clear Keys button dynamically if not present
         if (!document.getElementById('clearKeys')) {
             const clearBtn = document.createElement('button');
@@ -40,6 +47,11 @@ class PopupController {
         this.clearKeysBtn.addEventListener('click', () => this.clearKeys());
         this.toggleGroqBtn.addEventListener('click', (e) => this.toggleVisibility(e, this.groqKeyInput));
         this.toggleElevenBtn.addEventListener('click', (e) => this.toggleVisibility(e, this.elevenKeyInput));
+        
+        // Summary section events
+        this.summaryClose.addEventListener('click', () => this.hideSummary());
+        this.closeSummary.addEventListener('click', () => this.hideSummary());
+        this.readAloud.addEventListener('click', () => this.readSummaryAloud());
         
         // Allow Enter key to trigger guide
         this.userRequestInput.addEventListener('keypress', (e) => {
@@ -123,16 +135,6 @@ class PopupController {
 
     async summarizePage() {
         try {
-            // Check if GROQ API key is available
-            const result = await new Promise(resolve => {
-                chrome.storage.local.get(['groq_api_key'], resolve);
-            });
-            
-            if (!result.groq_api_key) {
-                this.showStatus('Please save your GROQ API key first!', 'error');
-                return;
-            }
-
             this.showStatus('Analyzing page content...', 'success');
             
             // Get the active tab
@@ -144,15 +146,88 @@ class PopupController {
             }
             
             // Send message to content script to extract page content
-            await chrome.tabs.sendMessage(tab.id, {
-                action: 'SUMMARIZE_PAGE'
+            const response = await chrome.tabs.sendMessage(tab.id, {
+                action: 'EXTRACT_PAGE_CONTENT'
             });
             
-            // Don't close popup immediately - let user see the summary
+            if (response && response.success) {
+                // Send page content to background for summarization
+                const summaryResponse = await chrome.runtime.sendMessage({
+                    action: 'SUMMARIZE_PAGE_CONTENT',
+                    pageContent: response.pageContent
+                });
+                
+                if (summaryResponse && summaryResponse.success) {
+                    this.displaySummary(summaryResponse.summary, summaryResponse.keyPoints);
+                    this.showStatus('Summary generated!', 'success');
+                } else {
+                    this.showStatus('Failed to generate summary', 'error');
+                }
+            } else {
+                this.showStatus('Failed to extract page content', 'error');
+            }
             
         } catch (error) {
             console.error('Error summarizing page:', error);
             this.showStatus('Error analyzing page. Make sure you\'re on a webpage!', 'error');
+        }
+    }
+    
+    displaySummary(summary, keyPoints) {
+        // Populate summary content
+        this.summaryContent.innerHTML = `
+            <h4>Summary</h4>
+            <p>${summary}</p>
+            <h4>Key Points</h4>
+            <ul>
+                ${keyPoints.map(point => `<li>${point}</li>`).join('')}
+            </ul>
+        `;
+        
+        // Show summary section
+        this.summarySection.classList.add('show');
+    }
+    
+    hideSummary() {
+        this.summarySection.classList.remove('show');
+    }
+    
+    async readSummaryAloud() {
+        try {
+            const summaryText = this.summaryContent.textContent;
+            if (!summaryText) return;
+            
+            // Try to use Eleven Labs TTS if available
+            const result = await new Promise(resolve => {
+                chrome.storage.local.get(['eleven_api_key'], resolve);
+            });
+            
+            if (result.eleven_api_key) {
+                const response = await chrome.runtime.sendMessage({
+                    action: 'ELEVEN_TTS',
+                    text: summaryText
+                });
+                
+                if (response && response.success && response.audioBase64) {
+                    const audio = new Audio(`data:audio/mpeg;base64,${response.audioBase64}`);
+                    audio.play();
+                    return;
+                }
+            }
+            
+            // Fallback to browser speech synthesis
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(summaryText);
+                utterance.rate = 0.8;
+                utterance.pitch = 1;
+                speechSynthesis.speak(utterance);
+            } else {
+                this.showStatus('Text-to-speech not supported', 'error');
+            }
+            
+        } catch (error) {
+            console.error('Error reading summary aloud:', error);
+            this.showStatus('Error with text-to-speech', 'error');
         }
     }
     

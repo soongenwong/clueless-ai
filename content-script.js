@@ -19,34 +19,69 @@ class CluelessAI {
     }
     
     initialize() {
-        console.log('Clueless AI initialized on:', window.location.href);
+        console.log('Clueless AI content script initialized on:', window.location.href);
         
         // Add visual indicator that extension is active
         this.addExtensionIndicator();
+        
+        // Signal that the content script is ready
+        if (chrome.runtime) {
+            chrome.runtime.sendMessage({ action: 'CONTENT_SCRIPT_READY', url: window.location.href })
+                .catch(err => console.log('Background script not ready yet:', err));
+        }
     }
     
     handleMessage(request, sender, sendResponse) {
-        console.log('Received message:', request);
+        console.log('Content script received message:', request);
         
-        switch (request.action) {
-            case 'START_GUIDE':
-                this.startGuidance(request.guidance, request.originalRequest);
-                sendResponse({ success: true });
-                break;
-                
-            case 'STOP_GUIDE':
-                this.stopGuidance();
-                sendResponse({ success: true });
-                break;
-                
-            case 'SUMMARIZE_PAGE':
-                this.summarizePage();
-                sendResponse({ success: true });
-                break;
-                
-            default:
-                sendResponse({ success: false, error: 'Unknown action' });
+        try {
+            switch (request.action) {
+                case 'START_GUIDE':
+                    this.startGuidance(request.guidance, request.originalRequest);
+                    sendResponse({ success: true });
+                    break;
+                    
+                case 'STOP_GUIDE':
+                    this.stopGuidance();
+                    sendResponse({ success: true });
+                    break;
+                    
+                case 'SUMMARIZE_PAGE':
+                    this.summarizePage();
+                    sendResponse({ success: true });
+                    break;
+                    
+                case 'EXTRACT_PAGE_CONTENT':
+                    try {
+                        const pageContent = this.extractPageContent();
+                        console.log('Extracted page content:', pageContent);
+                        sendResponse({ success: true, pageContent: pageContent });
+                    } catch (extractError) {
+                        console.error('Error extracting page content:', extractError);
+                        sendResponse({ success: false, error: 'Failed to extract page content' });
+                    }
+                    break;
+                    
+                case 'TEST_CONNECTION':
+                    console.log('Content script connection test successful');
+                    sendResponse({ 
+                        success: true, 
+                        message: 'Content script is working',
+                        url: window.location.href,
+                        timestamp: Date.now()
+                    });
+                    break;
+                    
+                default:
+                    console.warn('Unknown action:', request.action);
+                    sendResponse({ success: false, error: 'Unknown action' });
+            }
+        } catch (error) {
+            console.error('Error handling message:', error);
+            sendResponse({ success: false, error: error.message });
         }
+        
+        return true; // Indicates we will send a response asynchronously
     }
     
     async startGuidance(guidance, originalRequest) {
@@ -116,9 +151,6 @@ class CluelessAI {
         console.log('Starting page summarization...');
         
         try {
-            // Show initial notification
-            this.showNotification("Analyzing Page", "Extracting and analyzing page content...", "info");
-            
             // Extract comprehensive page content
             const pageContent = this.extractPageContent();
             
@@ -126,24 +158,14 @@ class CluelessAI {
             const summary = await this.requestPageSummary(pageContent);
             
             if (summary && summary.success) {
-                // Create and show summary tour
-                this.createSummaryTour(summary.summary, summary.keyPoints);
-                
-                // Speak the summary (shorter version)
-                const shortSummary = summary.summary.length > 200 
-                    ? summary.summary.substring(0, 200) + "..."
-                    : summary.summary;
-                this.speak("Here's a summary of this page: " + shortSummary);
-                
+                console.log('Summary generated successfully:', summary);
+                // The popup will handle displaying the summary
             } else {
-                this.showNotification("Summary Failed", "Unable to generate page summary. Please check your GROQ API key.", "error");
-                this.speak("I'm sorry, I couldn't generate a summary of this page. Please check your API key settings.");
+                console.error('Summary generation failed:', summary);
             }
             
         } catch (error) {
             console.error('Error summarizing page:', error);
-            this.showNotification("Summary Error", "An error occurred while summarizing the page.", "error");
-            this.speak("I encountered an error while trying to summarize this page.");
         }
     }
 

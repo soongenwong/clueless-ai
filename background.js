@@ -59,11 +59,17 @@ class BackgroundController {
                         const prompt = `You are an assistant that returns a JSON object with a single key \"selectors\" whose value is an array of CSS selectors (or :contains() pseudo selectors) that best match the user's request.\nUser request: "${(request.requestText || '').replace(/"/g,'\"')}"\nPage snippet: "${(request.pageSnippet || '').replace(/"/g,'\"').slice(0,2000)}"\nRespond ONLY with valid JSON like: {"selectors": ["selector1", "selector2"]}`;
 
                         const body = {
-                            prompt,
+                            messages: [
+                                {
+                                    role: "user",
+                                    content: prompt
+                                }
+                            ],
+                            model: "llama-3.1-8b-instant",
                             max_tokens: 300
                         };
 
-                        const resp = await fetch('https://api.groq.ai/v1/models/llama-3.1-8b-instant/completions', {
+                        const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -74,13 +80,16 @@ class BackgroundController {
 
                         const data = await resp.json();
 
-                        // Try to find the text output in a few common fields
+                        // Extract response from GROQ API format
                         let textOutput = '';
-                        if (typeof data === 'string') textOutput = data;
-                        else if (data.completion) textOutput = data.completion;
-                        else if (data.output && typeof data.output === 'string') textOutput = data.output;
-                        else if (data.choices && data.choices[0]) textOutput = data.choices[0].text || data.choices[0].message?.content || '';
-                        else textOutput = JSON.stringify(data);
+                        if (data.choices && data.choices[0] && data.choices[0].message) {
+                            textOutput = data.choices[0].message.content;
+                        } else if (data.choices && data.choices[0]) {
+                            textOutput = data.choices[0].text || '';
+                        } else {
+                            console.error('Unexpected GROQ API response format:', data);
+                            textOutput = JSON.stringify(data);
+                        }
 
                         // Extract first JSON object from the model output
                         const jsonMatch = textOutput.match(/\{[\s\S]*\}/);
@@ -130,9 +139,18 @@ Examples of good responses:
 
 Respond only with JSON:`;
 
-                        const body = { prompt, max_tokens: 500 };
+                        const body = {
+                            messages: [
+                                {
+                                    role: "user",
+                                    content: prompt
+                                }
+                            ],
+                            model: "llama-3.1-8b-instant",
+                            max_tokens: 500
+                        };
 
-                        const resp = await fetch('https://api.groq.ai/v1/models/llama-3.1-8b-instant/completions', {
+                        const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -144,11 +162,14 @@ Respond only with JSON:`;
                         const data = await resp.json();
 
                         let textOutput = '';
-                        if (typeof data === 'string') textOutput = data;
-                        else if (data.completion) textOutput = data.completion;
-                        else if (data.output && typeof data.output === 'string') textOutput = data.output;
-                        else if (data.choices && data.choices[0]) textOutput = data.choices[0].text || data.choices[0].message?.content || '';
-                        else textOutput = JSON.stringify(data);
+                        if (data.choices && data.choices[0] && data.choices[0].message) {
+                            textOutput = data.choices[0].message.content;
+                        } else if (data.choices && data.choices[0]) {
+                            textOutput = data.choices[0].text || '';
+                        } else {
+                            console.error('Unexpected GROQ API response format for AI_PARSE_REQUEST:', data);
+                            textOutput = JSON.stringify(data);
+                        }
 
                         const jsonMatch = textOutput.match(/\{[\s\S]*\}/);
                         let selectors = [];
@@ -172,80 +193,81 @@ Respond only with JSON:`;
                 return true;
 
             case 'SUMMARIZE_PAGE_CONTENT':
-                // Use GROQ API with model llama-3.1-8b-instant to summarize page content
-                chrome.storage.local.get(['groq_api_key'], async (items) => {
-                    const apiKey = items.groq_api_key;
-                    if (!apiKey) {
-                        sendResponse({ success: false, error: 'missing_groq_api_key' });
-                        return;
-                    }
-
-                    try {
-                        const pageContent = request.pageContent || {};
+                // Simple page summary without complex AI processing
+                try {
+                    const pageContent = request.pageContent || {};
+                    
+                    // Create a simple summary based on page content
+                    let summary = '';
+                    let keyPoints = [];
+                    
+                    // Generate summary from title and headings
+                    if (pageContent.title) {
+                        summary = `This page is titled "${pageContent.title}"`;
                         
-                        // Create a comprehensive prompt for page summarization
-                        const prompt = `You are an AI assistant that creates helpful summaries of web pages. Analyze the provided page content and create a concise but informative summary that tells the user what this page is about and what they can do on it.
-
-Page Title: ${pageContent.title || 'Unknown'}
-URL: ${pageContent.url || 'Unknown'}
-Headings: ${pageContent.headings ? pageContent.headings.map(h => h.text).join(', ') : 'None'}
-Main Text: ${(pageContent.mainText || '').substring(0, 1500)}
-Navigation Links: ${pageContent.links ? pageContent.links.map(l => l.text).slice(0, 8).join(', ') : 'None'}
-Buttons/Actions: ${pageContent.buttons ? pageContent.buttons.slice(0, 8).join(', ') : 'None'}
-Forms Available: ${pageContent.forms && pageContent.forms.length > 0 ? 'Yes' : 'No'}
-
-Create a JSON response with:
-- "summary": A 2-3 sentence summary of what this page is about and its main purpose
-- "keyPoints": An array of 3-5 key things a user can do on this page (specific actions or features)
-
-Respond ONLY with valid JSON like:
-{"summary": "This is a summary...", "keyPoints": ["Point 1", "Point 2", "Point 3"]}`;
-
-                        const body = { 
-                            prompt, 
-                            max_tokens: 400,
-                            temperature: 0.7
-                        };
-
-                        const resp = await fetch('https://api.groq.ai/v1/models/llama-3.1-8b-instant/completions', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${apiKey}`
-                            },
-                            body: JSON.stringify(body)
-                        });
-
-                        const data = await resp.json();
-
-                        let textOutput = '';
-                        if (typeof data === 'string') textOutput = data;
-                        else if (data.completion) textOutput = data.completion;
-                        else if (data.output && typeof data.output === 'string') textOutput = data.output;
-                        else if (data.choices && data.choices[0]) textOutput = data.choices[0].text || data.choices[0].message?.content || '';
-                        else textOutput = JSON.stringify(data);
-
-                        // Extract JSON from the model output
-                        const jsonMatch = textOutput.match(/\{[\s\S]*\}/);
-                        let summary = "This page contains various content and functionality.";
-                        let keyPoints = [];
+                        if (pageContent.headings && pageContent.headings.length > 0) {
+                            const mainHeadings = pageContent.headings.slice(0, 3).map(h => h.text).join(', ');
+                            summary += ` and covers topics including: ${mainHeadings}.`;
+                        } else {
+                            summary += '.';
+                        }
                         
-                        if (jsonMatch) {
-                            try {
-                                const parsed = JSON.parse(jsonMatch[0]);
-                                if (typeof parsed.summary === 'string') summary = parsed.summary;
-                                if (Array.isArray(parsed.keyPoints)) keyPoints = parsed.keyPoints;
-                            } catch (e) {
-                                console.warn('Failed to parse summarization JSON:', e);
+                        // Add main text context if available
+                        if (pageContent.mainText && pageContent.mainText.length > 50) {
+                            const firstSentence = pageContent.mainText.split('.')[0];
+                            if (firstSentence.length > 10 && firstSentence.length < 200) {
+                                summary += ` ${firstSentence}.`;
                             }
                         }
-
-                        sendResponse({ success: true, summary, keyPoints });
-                    } catch (err) {
-                        console.warn('GROQ summarization request failed:', err);
-                        sendResponse({ success: false, error: String(err) });
+                    } else {
+                        summary = 'This webpage contains various content and functionality.';
                     }
-                });
+                    
+                    // Generate key points from available actions
+                    if (pageContent.buttons && pageContent.buttons.length > 0) {
+                        keyPoints.push(`Interactive buttons: ${pageContent.buttons.slice(0, 3).join(', ')}`);
+                    }
+                    
+                    if (pageContent.links && pageContent.links.length > 0) {
+                        const linkTexts = pageContent.links.slice(0, 3).map(l => l.text).filter(t => t);
+                        if (linkTexts.length > 0) {
+                            keyPoints.push(`Navigation links: ${linkTexts.join(', ')}`);
+                        }
+                    }
+                    
+                    if (pageContent.forms && pageContent.forms.length > 0) {
+                        keyPoints.push('Forms available for user input');
+                    }
+                    
+                    // Add URL context
+                    if (pageContent.url) {
+                        try {
+                            const domain = new URL(pageContent.url).hostname;
+                            keyPoints.push(`Visit ${domain} for more information`);
+                        } catch (e) {
+                            // Invalid URL, skip
+                        }
+                    }
+                    
+                    // Ensure we have at least some key points
+                    if (keyPoints.length === 0) {
+                        keyPoints = [
+                            'Browse the content on this page',
+                            'Use navigation links to explore',
+                            'Look for interactive elements to engage with'
+                        ];
+                    }
+                    
+                    sendResponse({ success: true, summary, keyPoints });
+                    
+                } catch (err) {
+                    console.warn('Simple summarization failed:', err);
+                    sendResponse({ 
+                        success: true, 
+                        summary: 'This webpage contains content and interactive elements for user engagement.',
+                        keyPoints: ['Explore the page content', 'Use available navigation', 'Interact with buttons and links']
+                    });
+                }
                 return true;
 
             case 'ELEVEN_TTS':
