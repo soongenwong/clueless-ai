@@ -403,6 +403,66 @@ class CluelessAI {
         
         return false;
     }
+
+    prioritizeNavigationElements(elements, searchTerms) {
+        // Create different priority buckets
+        const navigationElements = [];
+        const tabElements = [];
+        const interactiveElements = [];
+        const nonInteractiveElements = [];
+        
+        elements.forEach(el => {
+            const element = el;
+            const text = element.textContent?.toLowerCase() || '';
+            const className = element.className?.toLowerCase() || '';
+            const tagName = element.tagName.toLowerCase();
+            const parent = element.parentElement;
+            const parentTag = parent?.tagName.toLowerCase() || '';
+            
+            // Check if this is likely a navigation element
+            const isInNav = element.closest('nav') || 
+                           element.closest('[role="navigation"]') ||
+                           element.closest('.navigation') ||
+                           element.closest('.nav') ||
+                           element.closest('header');
+            
+            // Check if this is a tab element
+            const isTab = element.getAttribute('role') === 'tab' ||
+                         className.includes('tab') ||
+                         className.includes('nav-item') ||
+                         element.closest('[role="tablist"]');
+            
+            // GitHub-specific navigation patterns
+            const isGitHubNav = className.includes('tabnav') ||
+                              className.includes('underlinenav') ||
+                              element.hasAttribute('data-tab-item');
+            
+            // Check if element text exactly matches our search terms
+            const hasExactMatch = searchTerms.some(term => 
+                text.includes(term.toLowerCase()) && 
+                text.length < term.length * 3 // Avoid matching very long text
+            );
+            
+            if ((isInNav || isTab || isGitHubNav) && hasExactMatch) {
+                if (isTab || isGitHubNav) {
+                    tabElements.push(element);
+                } else {
+                    navigationElements.push(element);
+                }
+            } else if (this.isInteractiveElement(element)) {
+                interactiveElements.push(element);
+            } else {
+                nonInteractiveElements.push(element);
+            }
+        });
+        
+        // Return elements in priority order:
+        // 1. Tab elements (highest priority for navigation)
+        // 2. Navigation elements 
+        // 3. Other interactive elements
+        // 4. Non-interactive elements
+        return [...tabElements, ...navigationElements, ...interactiveElements, ...nonInteractiveElements];
+    }
     
     findElementsByText(selector) {
         // Extract text from :contains() selector
@@ -776,42 +836,94 @@ class CluelessAI {
     smartTextSearch(searchTerm) {
         console.log('Performing smart text search for:', searchTerm);
         
-        // Extract keywords from the search term (same logic as popup)
-        const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'how', 'where', 'what', 'when', 'why', 'can', 'could', 'should', 'would', 'find', 'show', 'help', 'me', 'i', 'want', 'need']);
+        // Handle common multi-word phrases first
+        const phrases = [
+            'pull request', 'pull requests', 
+            'merge request', 'merge requests',
+            'sign in', 'sign up', 'log in', 'log out'
+        ];
         
-        const keywords = searchTerm.toLowerCase()
+        let cleanTerm = searchTerm.toLowerCase();
+        const foundPhrases = [];
+        
+        // Extract multi-word phrases
+        phrases.forEach(phrase => {
+            if (cleanTerm.includes(phrase)) {
+                foundPhrases.push(phrase);
+                cleanTerm = cleanTerm.replace(new RegExp(phrase, 'g'), '');
+            }
+        });
+        
+        // Extract keywords from the search term (same logic as popup)
+        const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'how', 'where', 'what', 'when', 'why', 'can', 'could', 'should', 'would', 'find', 'show', 'help', 'me', 'i', 'want', 'need', 'create']);
+        
+        const keywords = cleanTerm
             .replace(/[^\w\s]/g, ' ')
             .split(/\s+/)
             .filter(word => word.length > 2 && !stopWords.has(word));
         
-        console.log('Keywords extracted:', keywords);
+        // Combine phrases and keywords
+        const allTerms = [...foundPhrases, ...keywords];
+        
+        console.log('Search terms extracted:', allTerms);
         
         const foundElements = new Set();
         
-        // Search strategy 1: Exact keyword matches in text content
+        // Priority 1: Search for exact phrases first (most accurate)
+        foundPhrases.forEach(phrase => {
+            // High priority navigation elements with text search
+            const navSelectors = [
+                'nav a', 
+                '[role="tab"]', 
+                '.tab', 
+                '.tabnav-tab', 
+                '.UnderlineNav-item', 
+                'header a'
+            ];
+            
+            navSelectors.forEach(selector => {
+                try {
+                    const navElements = document.querySelectorAll(selector);
+                    Array.from(navElements).forEach(el => {
+                        if (el.textContent.toLowerCase().includes(phrase)) {
+                            foundElements.add(el);
+                        }
+                    });
+                } catch (e) {
+                    // Skip invalid selectors
+                }
+            });
+            
+            // General phrase matches
+            const phraseMatches = this.findElementsContainingText(phrase, true);
+            phraseMatches.forEach(el => foundElements.add(el));
+        });
+        
+        // Priority 2: Exact keyword matches in text content
         keywords.forEach(keyword => {
             const exactMatches = this.findElementsContainingText(keyword, true);
             exactMatches.forEach(el => foundElements.add(el));
         });
         
-        // Search strategy 2: Partial keyword matches in text content
+        // Priority 3: Partial keyword matches in text content
         keywords.forEach(keyword => {
             const partialMatches = this.findElementsContainingText(keyword, false);
             partialMatches.forEach(el => foundElements.add(el));
         });
         
-        // Search strategy 3: Attribute-based search
-        keywords.forEach(keyword => {
+        // Priority 4: Attribute-based search
+        allTerms.forEach(term => {
             const attrElements = document.querySelectorAll(`
-                [aria-label*="${keyword}" i],
-                [placeholder*="${keyword}" i],
-                [title*="${keyword}" i],
-                [alt*="${keyword}" i],
-                [data-testid*="${keyword}" i],
-                [class*="${keyword}" i],
-                [id*="${keyword}" i],
-                [name*="${keyword}" i],
-                [value*="${keyword}" i]
+                [aria-label*="${term}" i],
+                [placeholder*="${term}" i],
+                [title*="${term}" i],
+                [alt*="${term}" i],
+                [data-testid*="${term}" i],
+                [class*="${term}" i],
+                [id*="${term}" i],
+                [name*="${term}" i],
+                [value*="${term}" i],
+                [href*="${term}" i]
             `);
             
             Array.from(attrElements).forEach(el => foundElements.add(el));
@@ -820,9 +932,9 @@ class CluelessAI {
         // Convert Set to Array and filter
         const elementsArray = Array.from(foundElements);
         const visibleElements = elementsArray.filter(el => this.isElementVisible(el));
-        const prioritizedElements = this.prioritizeInteractiveElements(visibleElements);
+        const prioritizedElements = this.prioritizeNavigationElements(visibleElements, allTerms);
         
-        console.log(`Found ${prioritizedElements.length} elements for keywords: ${keywords.join(', ')}`);
+        console.log(`Found ${prioritizedElements.length} elements for terms: ${allTerms.join(', ')}`);
         return prioritizedElements;
     }
 

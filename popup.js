@@ -271,49 +271,120 @@ class PopupController {
     }
 
     extractKeywords(request) {
+        // Handle common multi-word phrases first
+        const phrases = [
+            'pull request', 'pull requests', 
+            'merge request', 'merge requests',
+            'sign in', 'sign up', 'log in', 'log out',
+            'shopping cart', 'contact us', 'about us',
+            'privacy policy', 'terms of service'
+        ];
+        
+        let cleanRequest = request.toLowerCase();
+        const foundPhrases = [];
+        
+        // Extract multi-word phrases
+        phrases.forEach(phrase => {
+            if (cleanRequest.includes(phrase)) {
+                foundPhrases.push(phrase);
+                // Replace phrase with placeholder to avoid duplicate single words
+                cleanRequest = cleanRequest.replace(new RegExp(phrase, 'g'), '');
+            }
+        });
+        
         // Remove common stop words and extract meaningful keywords
         const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'how', 'where', 'what', 'when', 'why', 'can', 'could', 'should', 'would', 'find', 'show', 'help', 'me', 'i', 'want', 'need']);
         
-        const words = request.toLowerCase()
+        const words = cleanRequest
             .replace(/[^\w\s]/g, ' ') // Replace punctuation with spaces
             .split(/\s+/)
             .filter(word => word.length > 2 && !stopWords.has(word));
         
-        return [...new Set(words)]; // Remove duplicates
+        // Combine phrases and individual keywords
+        const allKeywords = [...foundPhrases, ...words];
+        
+        return [...new Set(allKeywords)]; // Remove duplicates
     }
 
     generateKeywordBasedSelectors(keywords) {
         const selectors = [];
         
+        // Handle complex multi-word phrases first
+        const originalRequest = keywords.join(' ').toLowerCase();
+        
+        // GitHub-specific patterns for pull requests
+        if (originalRequest.includes('pull request') || (originalRequest.includes('pull') && originalRequest.includes('request'))) {
+            selectors.push(
+                // GitHub specific pull request selectors (highest priority)
+                'a[href*="pulls"]:contains("Pull requests")',
+                'a[data-tab-item="i1pulls-tab"]',
+                '[data-tab-item*="pulls"]',
+                'nav a:contains("Pull requests")',
+                '.tabnav-tab:contains("Pull requests")',
+                '.UnderlineNav-item:contains("Pull requests")',
+                // Generic pull request selectors
+                'a:contains("Pull requests")',
+                'button:contains("Pull requests")',
+                '*:contains("Pull requests")',
+                // Create PR button (secondary priority)
+                'a:contains("New pull request")',
+                'button:contains("New pull request")',
+                'a:contains("Create pull request")'
+            );
+        }
+        
+        // Handle "create" + something patterns
+        if (originalRequest.includes('create')) {
+            const afterCreate = originalRequest.split('create')[1]?.trim();
+            if (afterCreate) {
+                if (afterCreate.includes('pull') || afterCreate.includes('request')) {
+                    // Already handled above
+                } else if (afterCreate.includes('issue')) {
+                    selectors.push(
+                        'a:contains("New issue")',
+                        'button:contains("New issue")',
+                        'a[href*="issues/new"]'
+                    );
+                } else if (afterCreate.includes('repo') || afterCreate.includes('repository')) {
+                    selectors.push(
+                        'a:contains("New repository")',
+                        'button:contains("New repository")',
+                        'a[href*="new"]'
+                    );
+                }
+            }
+        }
+        
         keywords.forEach(keyword => {
-            // Direct text content searches (most important)
-            selectors.push(`*:contains("${keyword}")`);
-            selectors.push(`button:contains("${keyword}")`);
-            selectors.push(`a:contains("${keyword}")`);
-            selectors.push(`input[value*="${keyword}" i]`);
-            selectors.push(`label:contains("${keyword}")`);
+            // Skip very common words to reduce noise
+            if (['create', 'show', 'find', 'help', 'the', 'a', 'an'].includes(keyword.toLowerCase())) {
+                return;
+            }
+            
+            // Direct text content searches (prioritized by relevance)
+            selectors.push(`a:contains("${keyword}")`); // Links first (often navigation)
+            selectors.push(`button:contains("${keyword}")`); // Buttons second
+            selectors.push(`*[role="tab"]:contains("${keyword}")`); // Tab navigation
+            selectors.push(`nav *:contains("${keyword}")`); // Navigation items
+            selectors.push(`*:contains("${keyword}")`); // General fallback
             
             // Attribute-based searches
             selectors.push(`[aria-label*="${keyword}" i]`);
-            selectors.push(`[placeholder*="${keyword}" i]`);
             selectors.push(`[title*="${keyword}" i]`);
-            selectors.push(`[alt*="${keyword}" i]`);
             selectors.push(`[data-testid*="${keyword}" i]`);
+            selectors.push(`[href*="${keyword}" i]`);
             selectors.push(`[class*="${keyword}" i]`);
             selectors.push(`[id*="${keyword}" i]`);
-            selectors.push(`[name*="${keyword}" i]`);
-            selectors.push(`[href*="${keyword}" i]`);
             
             // Form-specific searches
-            selectors.push(`input[type="submit"][value*="${keyword}" i]`);
-            selectors.push(`button[type="submit"]:contains("${keyword}")`);
+            selectors.push(`input[value*="${keyword}" i]`);
+            selectors.push(`input[placeholder*="${keyword}" i]`);
+            selectors.push(`label:contains("${keyword}")`);
             
-            // Variations and partial matches
-            if (keyword.length > 3) {
-                const partial = keyword.substring(0, Math.floor(keyword.length * 0.7));
+            // Variations and partial matches (only for longer keywords)
+            if (keyword.length > 4) {
+                const partial = keyword.substring(0, Math.floor(keyword.length * 0.75));
                 selectors.push(`*:contains("${partial}")`);
-                selectors.push(`[class*="${partial}" i]`);
-                selectors.push(`[id*="${partial}" i]`);
             }
         });
         
@@ -321,10 +392,16 @@ class PopupController {
     }
 
     getPatternSelectors(lowercaseRequest) {
-        // Simplified pattern matching as fallback
+        // Enhanced pattern matching with GitHub and development workflow support
         const patterns = {
+            pullrequest: ['pull request', 'pr', 'pull requests', 'merge request'],
+            issues: ['issue', 'issues', 'bug', 'feature request'],
+            repository: ['repo', 'repository', 'project'],
+            code: ['code', 'files', 'source', 'browse'],
+            commits: ['commit', 'commits', 'history'],
+            branches: ['branch', 'branches'],
             search: ['search', 'find', 'look', 'query'],
-            login: ['login', 'signin', 'sign', 'account', 'auth'],
+            login: ['login', 'signin', 'sign in', 'account', 'auth'],
             menu: ['menu', 'nav', 'navigation', 'hamburger'],
             cart: ['cart', 'checkout', 'buy', 'purchase', 'order'],
             contact: ['contact', 'help', 'support', 'chat'],
@@ -337,26 +414,114 @@ class PopupController {
         for (const [category, keywords] of Object.entries(patterns)) {
             if (keywords.some(keyword => lowercaseRequest.includes(keyword))) {
                 switch (category) {
+                    case 'pullrequest':
+                        selectors.push(
+                            // GitHub Pull Requests tab (highest priority)
+                            'a[href*="pulls"]:contains("Pull requests")',
+                            '[data-tab-item="i1pulls-tab"]',
+                            '.tabnav-tab:contains("Pull requests")',
+                            '.UnderlineNav-item:contains("Pull requests")',
+                            'nav a:contains("Pull requests")',
+                            // Generic pull request links
+                            'a:contains("Pull requests")',
+                            'button:contains("Pull requests")',
+                            // Create new PR buttons (lower priority)
+                            'a:contains("New pull request")',
+                            'a:contains("Create pull request")',
+                            'button:contains("New pull request")'
+                        );
+                        break;
+                    case 'issues':
+                        selectors.push(
+                            'a[href*="issues"]:contains("Issues")', 
+                            '[data-tab-item*="issues"]',
+                            'a:contains("Issues")',
+                            'a:contains("New issue")',
+                            'button:contains("New issue")'
+                        );
+                        break;
+                    case 'repository':
+                        selectors.push(
+                            'a:contains("Code")', 
+                            '[data-tab-item*="code"]',
+                            'a:contains("Repository")',
+                            'a:contains("New repository")'
+                        );
+                        break;
+                    case 'code':
+                        selectors.push(
+                            'a[href*="tree"]:contains("Code")',
+                            '[data-tab-item="i0code-tab"]', 
+                            'a:contains("Code")',
+                            '.file-navigation'
+                        );
+                        break;
+                    case 'commits':
+                        selectors.push(
+                            'a[href*="commits"]', 
+                            'a:contains("Commits")',
+                            '.commit-link'
+                        );
+                        break;
+                    case 'branches':
+                        selectors.push(
+                            'a[href*="branches"]', 
+                            'a:contains("Branches")',
+                            '.branch-select'
+                        );
+                        break;
                     case 'search':
-                        selectors.push('input[placeholder*="search" i]', '[role="searchbox"]', 'input[type="search"]');
+                        selectors.push(
+                            'input[placeholder*="search" i]', 
+                            '[role="searchbox"]', 
+                            'input[type="search"]',
+                            '.search-input'
+                        );
                         break;
                     case 'login':
-                        selectors.push('a[href*="login" i]', 'button:contains("Login")', 'button:contains("Sign in")');
+                        selectors.push(
+                            'a[href*="login" i]', 
+                            'button:contains("Login")', 
+                            'button:contains("Sign in")',
+                            'a:contains("Sign in")'
+                        );
                         break;
                     case 'menu':
-                        selectors.push('nav', '[role="navigation"]', 'button[aria-label*="menu" i]');
+                        selectors.push(
+                            'nav', 
+                            '[role="navigation"]', 
+                            'button[aria-label*="menu" i]',
+                            '.header-nav'
+                        );
                         break;
                     case 'cart':
-                        selectors.push('button:contains("Checkout")', 'a[href*="cart" i]', 'button:contains("Buy")');
+                        selectors.push(
+                            'button:contains("Checkout")', 
+                            'a[href*="cart" i]', 
+                            'button:contains("Buy")',
+                            'a:contains("Cart")'
+                        );
                         break;
                     case 'contact':
-                        selectors.push('a[href*="contact" i]', 'button:contains("Contact")', 'a[href*="support" i]');
+                        selectors.push(
+                            'a[href*="contact" i]', 
+                            'button:contains("Contact")', 
+                            'a[href*="support" i]'
+                        );
                         break;
                     case 'settings':
-                        selectors.push('a[href*="settings" i]', 'button:contains("Settings")');
+                        selectors.push(
+                            'a[href*="settings" i]', 
+                            'button:contains("Settings")',
+                            'a:contains("Settings")'
+                        );
                         break;
                     case 'profile':
-                        selectors.push('a[href*="profile" i]', 'button:contains("Profile")');
+                        selectors.push(
+                            'a[href*="profile" i]', 
+                            'button:contains("Profile")',
+                            'a:contains("Profile")'
+                        );
                         break;
                 }
             }
