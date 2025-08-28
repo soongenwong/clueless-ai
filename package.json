@@ -1,0 +1,17 @@
+{
+  "name": "clueless-ai-test-server",
+  "version": "1.0.0",
+  "description": "Simple test server for Clueless AI extension",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "python3 start-test-server.py"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "open": "^8.4.0"
+  },
+  "keywords": ["chrome-extension", "test-server"],
+  "author": "Clueless AI",
+  "license": "MIT"
+}

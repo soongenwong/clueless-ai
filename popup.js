@@ -112,7 +112,14 @@ class PopupController {
             
         } catch (error) {
             console.error('Error starting guide:', error);
-            this.showStatus('Error starting guide. Make sure you\'re on a webpage!', 'error');
+            
+            // Check if this is a file URL issue
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab && tab.url && tab.url.startsWith('file://')) {
+                this.showStatus('Local file detected! Enable "Allow access to file URLs" in extension settings, or test on a live website.', 'error');
+            } else {
+                this.showStatus('Error starting guide. Make sure you\'re on a webpage!', 'error');
+            }
         }
     }
     
@@ -169,7 +176,14 @@ class PopupController {
             
         } catch (error) {
             console.error('Error summarizing page:', error);
-            this.showStatus('Error analyzing page. Make sure you\'re on a webpage!', 'error');
+            
+            // Check if this is a file URL issue
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab && tab.url && tab.url.startsWith('file://')) {
+                this.showStatus('Local file detected! Enable "Allow access to file URLs" in extension settings, or test on a live website.', 'error');
+            } else {
+                this.showStatus('Error analyzing page. Make sure you\'re on a webpage!', 'error');
+            }
         }
     }
     
